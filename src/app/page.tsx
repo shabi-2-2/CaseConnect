@@ -141,6 +141,14 @@ export default function DashboardPage() {
 
                 {/* Quick Action Buttons */}
                 <div className="flex flex-wrap items-center gap-2 sm:self-start md:self-auto">
+                  <a
+                    href="/pgrc-dashboard"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#002b5c]/30 bg-white px-3 py-2 text-xs font-semibold text-[#002b5c] shadow-2xs hover:bg-[#002b5c]/5 hover:text-[#001f3f] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    title="Go to PGRC Official Dashboard"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    <span>PGRC Official Dashboard</span>
+                  </a>
                   <button
                     onClick={handleRefresh}
                     disabled={isRefreshing}
