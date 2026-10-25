@@ -159,12 +159,19 @@ export default function LandingPage() {
   };
 
   const handleDirectNavigate = (route: string) => {
+    if (isLoading) return;
     setIsLoading(true);
-    router.push(route);
+    try {
+      router.push(route);
+    } catch {
+      setError('Navigation failed. Please try again.');
+      setIsLoading(false);
+    }
   };
 
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setError('');
 
     if (!email.trim() || !email.includes('@')) {
@@ -177,11 +184,18 @@ export default function LandingPage() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 400));
       if (selectedRole) {
         router.push(selectedRole.route);
+        return;
       }
-    }, 400);
+      setError('No role selected. Please choose a role and try again.');
+    } catch {
+      setError('Sign in failed. Please try again or use Direct Launch / Demo Bypass.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -367,17 +381,26 @@ export default function LandingPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsLoginOpen(false)}
+              onClick={() => !isLoading && setIsLoginOpen(false)}
               className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs"
             />
 
             {/* Modal Dialog */}
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="login-dialog-title"
               initial={{ opacity: 0, scale: 0.95, y: 14 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 14 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl overflow-hidden"
+              className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && !isLoading) {
+                  setIsLoginOpen(false);
+                }
+              }}
+              tabIndex={-1}
             >
               {/* Header */}
               <div className="flex items-start justify-between border-b border-slate-100 pb-4">
@@ -388,7 +411,7 @@ export default function LandingPage() {
                     <selectedRole.icon className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-base text-slate-900">
+                    <h3 id="login-dialog-title" className="font-bold text-base text-slate-900">
                       Sign In as {selectedRole.name}
                     </h3>
                     <p className="text-[11px] text-slate-500 font-medium">
@@ -398,8 +421,10 @@ export default function LandingPage() {
                 </div>
 
                 <button
-                  onClick={() => setIsLoginOpen(false)}
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                  onClick={() => !isLoading && setIsLoginOpen(false)}
+                  disabled={isLoading}
+                  aria-label="Close login dialog"
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <X className="h-4 w-4" />
                 </button>
