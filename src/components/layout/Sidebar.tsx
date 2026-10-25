@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Building2,
@@ -22,8 +24,8 @@ export type NavTab =
   | 'reports';
 
 interface SidebarProps {
-  activeTab: NavTab;
-  onTabChange: (tab: NavTab) => void;
+  activeTab?: NavTab;
+  onTabChange?: (tab: NavTab) => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
   isCollapsed: boolean;
@@ -38,29 +40,46 @@ export function Sidebar({
   isCollapsed,
   onToggleCollapse,
 }: SidebarProps) {
+  const pathname = usePathname();
+
+  // Determine active tab based on pathname or prop
+  const currentTab: NavTab = React.useMemo(() => {
+    if (activeTab) return activeTab;
+    if (!pathname) return 'overview';
+    if (pathname.startsWith('/management/institutions')) return 'institutions';
+    if (pathname.startsWith('/management/cases')) return 'cases';
+    if (pathname.startsWith('/management/overlaps')) return 'overlaps';
+    if (pathname.startsWith('/management/reports')) return 'reports';
+    return 'overview';
+  }, [activeTab, pathname]);
+
   const navItems = [
     {
       id: 'overview' as NavTab,
       label: 'Overview',
       icon: LayoutDashboard,
+      href: '/management',
       badge: null,
     },
     {
       id: 'institutions' as NavTab,
       label: 'Institution Directory',
       icon: Building2,
+      href: '/management/institutions',
       badge: null,
     },
     {
       id: 'cases' as NavTab,
       label: 'All Cases',
       icon: FolderKanban,
+      href: '/management/cases',
       badge: '1,482',
     },
     {
       id: 'overlaps' as NavTab,
       label: 'Overlap Detection Centre',
       icon: CopyCheck,
+      href: '/management/overlaps',
       badge: '18',
       badgeColor: 'bg-purple-100 text-purple-700 font-bold',
     },
@@ -68,12 +87,15 @@ export function Sidebar({
       id: 'reports' as NavTab,
       label: 'Reports & Analytics',
       icon: BarChart3,
+      href: '/management/reports',
       badge: null,
     },
   ];
 
   const handleNavClick = (id: NavTab) => {
-    onTabChange(id);
+    if (onTabChange) {
+      onTabChange(id);
+    }
     if (isOpenMobile) {
       onCloseMobile();
     }
@@ -99,8 +121,7 @@ export function Sidebar({
       >
         {/* Brand / Logo Header */}
         <div className="flex h-16 items-center justify-between border-b border-slate-200/80 px-4">
-          <div className="flex items-center gap-3 overflow-hidden">
-            {/* AICTE emblem emblem block */}
+          <Link href="/management" className="flex items-center gap-3 overflow-hidden">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#003366] text-white shadow-md">
               <ShieldCheck className="h-5 w-5 text-amber-300" />
             </div>
@@ -115,7 +136,7 @@ export function Sidebar({
                 </span>
               </div>
             )}
-          </div>
+          </Link>
 
           {/* Desktop Collapse Toggle Button */}
           <button
@@ -153,17 +174,22 @@ export function Sidebar({
 
         {/* Navigation List */}
         <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
-          <div className={`px-2 pb-1.5 text-[10px] font-semibold tracking-wider text-slate-400 uppercase ${isCollapsed ? 'text-center' : ''}`}>
+          <div
+            className={`px-2 pb-1.5 text-[10px] font-semibold tracking-wider text-slate-400 uppercase ${
+              isCollapsed ? 'text-center' : ''
+            }`}
+          >
             {isCollapsed ? '•••' : 'Main Navigation'}
           </div>
 
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activeTab === item.id;
+            const isActive = currentTab === item.id;
 
             return (
-              <button
+              <Link
                 key={item.id}
+                href={item.href}
                 onClick={() => handleNavClick(item.id)}
                 title={isCollapsed ? item.label : undefined}
                 className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
@@ -202,7 +228,7 @@ export function Sidebar({
                     {item.badge}
                   </span>
                 )}
-              </button>
+              </Link>
             );
           })}
         </nav>

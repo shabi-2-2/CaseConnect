@@ -19,7 +19,6 @@ import { RegionBarChart } from '@/components/charts/RegionBarChart';
 import { ManagementAttentionTable } from '@/components/dashboard/ManagementAttentionTable';
 import { RecentActivityFeed } from '@/components/dashboard/RecentActivityFeed';
 import { CaseDetailsModal } from '@/components/dashboard/CaseDetailsModal';
-import { PlaceholderView } from '@/components/dashboard/PlaceholderView';
 import { KPI_DATA, SAMPLE_CASES } from '@/data/mockData';
 import { CaseItem } from '@/types/dashboard';
 import { useMounted } from '@/lib/utils';
@@ -107,13 +106,7 @@ export default function SeniorManagementDashboard() {
 
         {/* Content Area */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
-          {activeTab !== 'overview' ? (
-            <PlaceholderView
-              tab={activeTab}
-              onBackToOverview={() => setActiveTab('overview')}
-            />
-          ) : (
-            <div className="space-y-6">
+          <div className="space-y-6">
               {/* Role Switch Banner */}
               <div className="flex items-center justify-between rounded-lg bg-blue-50/80 border border-blue-200/80 px-4 py-2 text-xs text-blue-900">
                 <span className="flex items-center gap-2">
@@ -266,7 +259,6 @@ export default function SeniorManagementDashboard() {
                 </motion.div>
               </section>
             </div>
-          )}
         </main>
       </div>
 
