@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Calendar,
@@ -24,9 +24,10 @@ import { ManagementAttentionTable } from '@/components/dashboard/ManagementAtten
 import { RecentActivityFeed } from '@/components/dashboard/RecentActivityFeed';
 import { CaseDetailsModal } from '@/components/dashboard/CaseDetailsModal';
 import { PlaceholderView } from '@/components/dashboard/PlaceholderView';
-import { KPI_DATA, SAMPLE_CASES } from '@/data/mockData';
+import { KPI_DATA } from '@/data/mockData';
 import { CaseItem } from '@/types/dashboard';
 import { useMounted } from '@/lib/utils';
+import { fetchComplaints } from '@/lib/complaints-api';
 
 export type NavTab = 'overview' | 'institutions' | 'cases' | 'overlaps' | 'reports';
 
@@ -37,7 +38,33 @@ export default function SeniorManagementDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [allCases, setAllCases] = useState<CaseItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const mounted = useMounted();
+
+  const loadCases = async (showRefresh = false) => {
+    if (showRefresh) setIsRefreshing(true);
+    try {
+      setError(null);
+      const data = await fetchComplaints();
+      setAllCases(data);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load complaints');
+    } finally {
+      setLoading(false);
+      if (showRefresh) setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCases(false);
+    pollingRef.current = setInterval(() => loadCases(false), 8000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
 
   const formattedDate = mounted
     ? new Date().toLocaleDateString('en-IN', {
@@ -49,14 +76,11 @@ export default function SeniorManagementDashboard() {
     : 'Saturday, 24 October 2026';
 
   const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 700);
+    loadCases(true);
   };
 
   const handleSelectCaseById = (caseId: string) => {
-    const found = SAMPLE_CASES.find((c) => c.id === caseId || c.caseNumber === caseId);
+    const found = allCases.find((c) => c.id === caseId || c.caseNumber === caseId);
     if (found) {
       setSelectedCase(found);
       setActiveTab('overview');
@@ -64,7 +88,7 @@ export default function SeniorManagementDashboard() {
   };
 
   const handleViewRelatedCase = (relatedCaseNumber: string) => {
-    const found = SAMPLE_CASES.find((c) => c.caseNumber === relatedCaseNumber);
+    const found = allCases.find((c) => c.caseNumber === relatedCaseNumber);
     if (found) {
       setSelectedCase(found);
     }
@@ -242,7 +266,7 @@ export default function SeniorManagementDashboard() {
 
               <section id="management-attention-section" aria-label="Management Attention and Activity Feed" className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.3 }} className="lg:col-span-8">
-                  <ManagementAttentionTable cases={SAMPLE_CASES} onViewCase={(c) => setSelectedCase(c)} externalSearchQuery={searchQuery} />
+                  <ManagementAttentionTable cases={allCases} onViewCase={(c) => setSelectedCase(c)} externalSearchQuery={searchQuery} />
                 </motion.div>
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.35 }} className="lg:col-span-4">
                   <RecentActivityFeed onSelectCase={handleSelectCaseById} />

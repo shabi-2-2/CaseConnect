@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Calendar,
@@ -20,9 +20,10 @@ import { Navbar } from '@/components/layout/Navbar';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { StatusDonutChart } from '@/components/charts/StatusDonutChart';
 import { CaseDetailsModal } from '@/components/dashboard/CaseDetailsModal';
-import { SAMPLE_CASES, RECENT_ACTIVITIES } from '@/data/mockData';
+import { RECENT_ACTIVITIES } from '@/data/mockData';
 import { CaseItem } from '@/types/dashboard';
 import { useMounted, formatDate, formatIndianNumber } from '@/lib/utils';
+import { fetchComplaints } from '@/lib/complaints-api';
 
 type PGRCSidebarTab =
   | 'overview'
@@ -45,8 +46,36 @@ export default function PGRCDashboardPage() {
   const [overlapFilter, setOverlapFilter] = useState<'ALL' | 'OVERLAP' | 'NO_OVERLAP'>('ALL');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [allCases, setAllCases] = useState<CaseItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   const mounted = useMounted();
+
+  const loadCases = async (showRefresh = false) => {
+    if (showRefresh) setIsRefreshing(true);
+    try {
+      setError(null);
+      const data = await fetchComplaints();
+      setAllCases(data);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load complaints');
+    } finally {
+      setLoading(false);
+      if (showRefresh) setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCases(false);
+    pollingRef.current = setInterval(() => {
+      loadCases(false);
+    }, 8000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
 
   const formattedDate = mounted
     ? new Date().toLocaleDateString('en-IN', {
@@ -58,12 +87,12 @@ export default function PGRCDashboardPage() {
     : 'Saturday, 24 October 2026';
 
   const pgrcCases = useMemo(() => {
-    return SAMPLE_CASES.filter((c) => c.bureau === 'PGRC');
-  }, []);
+    return allCases.filter((c) => c.bureau === 'PGRC');
+  }, [allCases]);
 
   const rbCases = useMemo(() => {
-    return SAMPLE_CASES.filter((c) => c.bureau === 'Regulation Bureau');
-  }, []);
+    return allCases.filter((c) => c.bureau === 'Regulation Bureau');
+  }, [allCases]);
 
   const pgrcKpis = useMemo(() => {
     const total = pgrcCases.length;
@@ -173,10 +202,7 @@ export default function PGRCDashboardPage() {
   }, [pgrcCases, statusFilter, categoryFilter, overlapFilter, searchQuery, dateFrom, dateTo]);
 
   const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 700);
+    loadCases(true);
   };
 
   const handleExport = () => {
@@ -219,14 +245,14 @@ export default function PGRCDashboardPage() {
   };
 
   const handleSelectCaseById = (caseId: string) => {
-    const found = SAMPLE_CASES.find((c) => c.id === caseId || c.caseNumber === caseId);
+    const found = allCases.find((c) => c.id === caseId || c.caseNumber === caseId);
     if (found) {
       setSelectedCase(found);
     }
   };
 
   const handleViewRelatedCase = (relatedCaseNumber: string) => {
-    const found = SAMPLE_CASES.find((c) => c.caseNumber === relatedCaseNumber);
+    const found = allCases.find((c) => c.caseNumber === relatedCaseNumber);
     if (found) {
       setSelectedCase(found);
     }
@@ -237,9 +263,9 @@ export default function PGRCDashboardPage() {
       .filter((c) => c.hasOverlapAlert && c.overlapDetails)
       .map((c) => ({
         pgrcCase: c,
-        rbCase: SAMPLE_CASES.find((rb) => rb.caseNumber === c.overlapDetails?.overlapCaseId) || null,
+        rbCase: allCases.find((rb) => rb.caseNumber === c.overlapDetails?.overlapCaseId) || null,
       }));
-  }, [pgrcCases]);
+  }, [pgrcCases, allCases]);
 
   const relatedRbByInstitution = useMemo(() => {
     const pgrcInsts = new Set(pgrcCases.map((c) => c.institutionCode));

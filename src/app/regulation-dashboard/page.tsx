@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Scale,
@@ -10,17 +10,41 @@ import {
   FileText,
   ShieldCheck,
 } from 'lucide-react';
-import { SAMPLE_CASES } from '@/data/mockData';
 import { CaseDetailsModal } from '@/components/dashboard/CaseDetailsModal';
 import { CaseItem } from '@/types/dashboard';
 import { useMounted, formatDate } from '@/lib/utils';
+import { fetchComplaints } from '@/lib/complaints-api';
 
 export default function RegulationBureauDashboard() {
   const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | CaseItem['status']>('ALL');
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
+  const [allCases, setAllCases] = useState<CaseItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const mounted = useMounted();
+
+  const loadCases = async () => {
+    try {
+      setError(null);
+      const data = await fetchComplaints();
+      setAllCases(data);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load complaints');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCases();
+    pollingRef.current = setInterval(loadCases, 8000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
 
   const formattedDate = mounted
     ? new Date().toLocaleDateString('en-IN', {
@@ -31,7 +55,7 @@ export default function RegulationBureauDashboard() {
       })
     : 'Saturday, 24 October 2026';
 
-  const rbCases = SAMPLE_CASES.filter((c) => c.bureau === 'Regulation Bureau');
+  const rbCases = allCases.filter((c) => c.bureau === 'Regulation Bureau');
 
   const filteredCases = rbCases.filter((c) => {
     if (statusFilter !== 'ALL' && c.status !== statusFilter) return false;
