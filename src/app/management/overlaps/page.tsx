@@ -80,6 +80,9 @@ export default function OverlapDetectionCenterPage() {
     (o) => o.reviewStatus === 'Confirmed Duplicate'
   ).length;
   const dismissedCount = overlaps.filter((o) => o.reviewStatus === 'Separate Matters').length;
+  const investigationCount = overlaps.filter(
+    (o) => o.reviewStatus === 'Requires Further Investigation'
+  ).length;
 
   // Open confirmation modal
   const openConfirmDialog = (
@@ -186,9 +189,8 @@ export default function OverlapDetectionCenterPage() {
 
       {/* Main Content Area with Proper Sidebar Margin & Transition */}
       <div
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${
-          isCollapsed ? 'lg:pl-20' : 'lg:pl-64'
-        }`}
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'lg:pl-20' : 'lg:pl-64'
+          }`}
       >
         <Navbar
           onToggleSidebar={() => setIsSidebarOpenMobile(!isSidebarOpenMobile)}
@@ -258,17 +260,16 @@ export default function OverlapDetectionCenterPage() {
             {/* Summary Metrics Cards */}
             <motion.div
               variants={itemVariants}
-              className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6"
+              className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7"
             >
               <motion.div
                 whileHover={shouldReduceMotion ? {} : { y: -2 }}
                 transition={{ duration: 0.2 }}
                 onClick={() => setStatusFilter('ALL')}
-                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${
-                  statusFilter === 'ALL'
+                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${statusFilter === 'ALL'
                     ? 'border-purple-500 bg-purple-50/50 ring-1 ring-purple-500'
                     : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <div className="text-[11px] font-medium text-slate-500">Total Alerts</div>
                 <div className="mt-1 text-xl font-bold text-slate-900">{totalCount}</div>
@@ -279,11 +280,10 @@ export default function OverlapDetectionCenterPage() {
                 whileHover={shouldReduceMotion ? {} : { y: -2 }}
                 transition={{ duration: 0.2 }}
                 onClick={() => setStatusFilter('Awaiting Review')}
-                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${
-                  statusFilter === 'Awaiting Review'
+                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${statusFilter === 'Awaiting Review'
                     ? 'border-amber-500 bg-amber-50/50 ring-1 ring-amber-500'
                     : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <div className="text-[11px] font-medium text-amber-700">Awaiting Review</div>
                 <div className="mt-1 text-xl font-bold text-amber-800">{awaitingCount}</div>
@@ -296,11 +296,10 @@ export default function OverlapDetectionCenterPage() {
                 onClick={() =>
                   setPriorityFilter(priorityFilter === 'Critical' ? 'ALL' : 'Critical')
                 }
-                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${
-                  priorityFilter === 'Critical'
+                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${priorityFilter === 'Critical'
                     ? 'border-rose-500 bg-rose-50/50 ring-1 ring-rose-500'
                     : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <div className="text-[11px] font-medium text-rose-700">High Priority</div>
                 <div className="mt-1 text-xl font-bold text-rose-800">{highPriorityCount}</div>
@@ -311,11 +310,10 @@ export default function OverlapDetectionCenterPage() {
                 whileHover={shouldReduceMotion ? {} : { y: -2 }}
                 transition={{ duration: 0.2 }}
                 onClick={() => setStatusFilter('Confirmed Related')}
-                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${
-                  statusFilter === 'Confirmed Related'
+                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${statusFilter === 'Confirmed Related'
                     ? 'border-blue-500 bg-blue-50/50 ring-1 ring-blue-500'
                     : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <div className="text-[11px] font-medium text-blue-700">Confirmed Related</div>
                 <div className="mt-1 text-xl font-bold text-blue-800">{confirmedRelatedCount}</div>
@@ -326,11 +324,10 @@ export default function OverlapDetectionCenterPage() {
                 whileHover={shouldReduceMotion ? {} : { y: -2 }}
                 transition={{ duration: 0.2 }}
                 onClick={() => setStatusFilter('Confirmed Duplicate')}
-                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${
-                  statusFilter === 'Confirmed Duplicate'
+                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${statusFilter === 'Confirmed Duplicate'
                     ? 'border-rose-500 bg-rose-50/50 ring-1 ring-rose-500'
                     : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <div className="text-[11px] font-medium text-rose-700">Confirmed Duplicate</div>
                 <div className="mt-1 text-xl font-bold text-rose-800">
@@ -343,17 +340,32 @@ export default function OverlapDetectionCenterPage() {
                 whileHover={shouldReduceMotion ? {} : { y: -2 }}
                 transition={{ duration: 0.2 }}
                 onClick={() => setStatusFilter('Separate Matters')}
-                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${
-                  statusFilter === 'Separate Matters'
+                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${statusFilter === 'Separate Matters'
                     ? 'border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-500'
                     : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <div className="text-[11px] font-medium text-emerald-700">
                   Dismissed / Separate
                 </div>
                 <div className="mt-1 text-xl font-bold text-emerald-800">{dismissedCount}</div>
                 <div className="text-[10px] text-emerald-600">Independent cases</div>
+              </motion.div>
+
+              <motion.div
+                whileHover={shouldReduceMotion ? {} : { y: -2 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setStatusFilter('Requires Further Investigation')}
+                className={`cursor-pointer rounded-xl border p-3.5 shadow-2xs transition-all ${statusFilter === 'Requires Further Investigation'
+                    ? 'border-purple-500 bg-purple-50/50 ring-1 ring-purple-500'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+              >
+                <div className="text-[11px] font-medium text-purple-700">
+                  Needs Investigation
+                </div>
+                <div className="mt-1 text-xl font-bold text-purple-800">{investigationCount}</div>
+                <div className="text-[10px] text-purple-600">Field verification</div>
               </motion.div>
             </motion.div>
 
@@ -456,11 +468,10 @@ export default function OverlapDetectionCenterPage() {
                           </span>
 
                           <span
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                              ovr.priority === 'Critical'
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${ovr.priority === 'Critical'
                                 ? 'bg-rose-50 text-rose-700 border border-rose-200'
                                 : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}
+                              }`}
                           >
                             {ovr.priority} Priority
                           </span>
@@ -516,13 +527,12 @@ export default function OverlapDetectionCenterPage() {
                               </Link>
                             </div>
                             <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                ovr.case1.status === 'Overdue'
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${ovr.case1.status === 'Overdue'
                                   ? 'bg-rose-100 text-rose-800 font-bold'
                                   : ovr.case1.status === 'Disposed'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-blue-100 text-blue-800'
-                              }`}
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-blue-100 text-blue-800'
+                                }`}
                             >
                               {ovr.case1.status}
                             </span>
@@ -563,13 +573,12 @@ export default function OverlapDetectionCenterPage() {
                               </Link>
                             </div>
                             <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                ovr.case2.status === 'Overdue'
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${ovr.case2.status === 'Overdue'
                                   ? 'bg-rose-100 text-rose-800 font-bold'
                                   : ovr.case2.status === 'Disposed'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-blue-100 text-blue-800'
-                              }`}
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-blue-100 text-blue-800'
+                                }`}
                             >
                               {ovr.case2.status}
                             </span>
@@ -607,11 +616,10 @@ export default function OverlapDetectionCenterPage() {
                           </span>
 
                           <span
-                            className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium border ${
-                              ovr.ruleMatches.categoryMatch
+                            className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium border ${ovr.ruleMatches.categoryMatch
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                 : 'bg-slate-100 text-slate-600 border-slate-200'
-                            }`}
+                              }`}
                           >
                             <Check className="h-3 w-3" /> Related Complaint Subject
                           </span>
@@ -659,11 +667,10 @@ export default function OverlapDetectionCenterPage() {
                                   'Confirmed Related'
                                 )
                               }
-                              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                                ovr.reviewStatus === 'Confirmed Related'
+                              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${ovr.reviewStatus === 'Confirmed Related'
                                   ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
                                   : 'bg-white text-blue-700 border-blue-300 hover:bg-blue-50'
-                              }`}
+                                }`}
                             >
                               Confirmed Related
                             </button>
@@ -678,11 +685,10 @@ export default function OverlapDetectionCenterPage() {
                                   'Confirmed Duplicate'
                                 )
                               }
-                              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                                ovr.reviewStatus === 'Confirmed Duplicate'
+                              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${ovr.reviewStatus === 'Confirmed Duplicate'
                                   ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
                                   : 'bg-white text-rose-700 border-rose-300 hover:bg-rose-50'
-                              }`}
+                                }`}
                             >
                               Confirmed Duplicate
                             </button>
@@ -697,11 +703,10 @@ export default function OverlapDetectionCenterPage() {
                                   'Separate Matters'
                                 )
                               }
-                              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                                ovr.reviewStatus === 'Separate Matters'
+                              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${ovr.reviewStatus === 'Separate Matters'
                                   ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
                                   : 'bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50'
-                              }`}
+                                }`}
                             >
                               Separate Matters
                             </button>
@@ -716,11 +721,10 @@ export default function OverlapDetectionCenterPage() {
                                   'Requires Further Investigation'
                                 )
                               }
-                              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                                ovr.reviewStatus === 'Requires Further Investigation'
+                              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${ovr.reviewStatus === 'Requires Further Investigation'
                                   ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
                                   : 'bg-white text-purple-700 border-purple-300 hover:bg-purple-50'
-                              }`}
+                                }`}
                             >
                               Requires Investigation
                             </button>

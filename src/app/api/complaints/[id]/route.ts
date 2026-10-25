@@ -64,6 +64,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updates.push('has_overlap_alert = @has_overlap_alert');
       values.has_overlap_alert = body.hasOverlapAlert ? 1 : 0;
     }
+    if (body.managementFlagged !== undefined) {
+      updates.push('management_flagged = @management_flagged');
+      values.management_flagged = body.managementFlagged ? 1 : 0;
+    }
+    if (body.followUp !== undefined) {
+      updates.push('follow_up_json = @follow_up_json');
+      values.follow_up_json = body.followUp ? JSON.stringify(body.followUp) : null;
+    }
+    if (body.managementNotes !== undefined) {
+      updates.push('notes_json = @notes_json');
+      values.notes_json = JSON.stringify(body.managementNotes);
+    }
 
     updates.push("last_updated = @last_updated");
     values.last_updated = new Date().toISOString().split('T')[0];
@@ -75,6 +87,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const sql = `UPDATE complaints SET ${updates.join(', ')} WHERE id = @id`;
     db.prepare(sql).run(values);
+
+    // If status changed, record in case_history
+    if (body.status !== undefined && body.status !== (existing as any).status) {
+      try {
+        const histId = `hist-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        db.prepare(`
+          INSERT INTO case_history (id, case_id, case_number, action, previous_status, new_status, actor_name, actor_role, remarks, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        `).run(
+          histId,
+          (existing as any).id,
+          (existing as any).case_number,
+          `Status changed to ${body.status}`,
+          (existing as any).status,
+          body.status,
+          body.actorName || body.assignedOfficer || 'Authorized Official',
+          body.actorRole || 'Official',
+          body.remarks || `Status transitioned from ${(existing as any).status} to ${body.status}`
+        );
+      } catch (err) {
+        console.error('Failed to log history', err);
+      }
+    }
+
     const updated = db.prepare('SELECT * FROM complaints WHERE id = ?').get(id);
     return NextResponse.json({ complaint: rowToComplaint(updated as any) }, { status: 200 });
   } catch {

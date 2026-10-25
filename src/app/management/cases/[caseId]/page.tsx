@@ -47,10 +47,24 @@ function CaseDetailsContent({ params }: CaseDetailsPageProps) {
   const [followUpInstructions, setFollowUpInstructions] = useState('');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
+
   // Find target case
   const caseItem = cases.find(
     (c) => c.caseNumber.toLowerCase() === rawCaseId.toLowerCase() || c.id === rawCaseId
   );
+
+  React.useEffect(() => {
+    if (!caseItem) return;
+    fetch(`/api/case-history?caseId=${encodeURIComponent(caseItem.id)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.history)) {
+          setHistoryItems(d.history);
+        }
+      })
+      .catch((err) => console.error('Failed to load history', err));
+  }, [caseItem]);
 
   // Find associated institution
   const institution = institutions.find(
@@ -445,48 +459,80 @@ function CaseDetailsContent({ params }: CaseDetailsPageProps) {
 
                   <div className="mt-4 space-y-4">
                     <div className="relative pl-6 before:absolute before:left-2 before:top-2 before:bottom-0 before:w-0.5 before:bg-slate-200">
-                      {/* Milestone 1 */}
-                      <div className="relative mb-6">
-                        <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-blue-600 shadow-xs" />
-                        <div className="flex items-center justify-between text-xs font-medium">
-                          <span className="text-slate-900">Grievance Registered & Cataloged</span>
-                          <span className="text-[11px] text-slate-400">{caseItem.submissionDate}</span>
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-slate-500">
-                          Complaint received through portal, verified preliminary jurisdiction and
-                          routed to {caseItem.bureau}.
-                        </p>
-                      </div>
+                      {historyItems.length > 0 ? (
+                        historyItems.map((h, idx) => (
+                          <div key={h.id || idx} className="relative mb-6">
+                            <div
+                              className={`absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-white shadow-xs ${
+                                h.newStatus === 'Disposed'
+                                  ? 'bg-emerald-600'
+                                  : h.newStatus === 'Overdue'
+                                  ? 'bg-rose-500'
+                                  : 'bg-blue-600'
+                              }`}
+                            />
+                            <div className="flex items-center justify-between text-xs font-medium">
+                              <span className="text-slate-900 font-semibold">{h.action}</span>
+                              <span className="text-[11px] text-slate-400">
+                                {h.createdAt ? h.createdAt.slice(0, 16) : ''}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-slate-500">
+                              {h.actorName && (
+                                <span className="font-semibold text-slate-700">
+                                  {h.actorName} ({h.actorRole || 'Official'}):{' '}
+                                </span>
+                              )}
+                              {h.remarks}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <>
+                          {/* Milestone 1 */}
+                          <div className="relative mb-6">
+                            <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-blue-600 shadow-xs" />
+                            <div className="flex items-center justify-between text-xs font-medium">
+                              <span className="text-slate-900">Grievance Registered & Cataloged</span>
+                              <span className="text-[11px] text-slate-400">{caseItem.submissionDate}</span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-slate-500">
+                              Complaint received through portal, verified preliminary jurisdiction and
+                              routed to {caseItem.bureau}.
+                            </p>
+                          </div>
 
-                      {/* Milestone 2 */}
-                      <div className="relative mb-6">
-                        <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-indigo-600 shadow-xs" />
-                        <div className="flex items-center justify-between text-xs font-medium">
-                          <span className="text-slate-900">
-                            Investigating Officer Assigned ({caseItem.assignedOfficer})
-                          </span>
-                          <span className="text-[11px] text-slate-400">
-                            {caseItem.submissionDate}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-slate-500">
-                          Assigned for detailed factual assessment and institutional response call.
-                        </p>
-                      </div>
+                          {/* Milestone 2 */}
+                          <div className="relative mb-6">
+                            <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-indigo-600 shadow-xs" />
+                            <div className="flex items-center justify-between text-xs font-medium">
+                              <span className="text-slate-900">
+                                Investigating Officer Assigned ({caseItem.assignedOfficer})
+                              </span>
+                              <span className="text-[11px] text-slate-400">
+                                {caseItem.submissionDate}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-slate-500">
+                              Assigned for detailed factual assessment and institutional response call.
+                            </p>
+                          </div>
 
-                      {/* Milestone 3 */}
-                      <div className="relative mb-6">
-                        <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-amber-500 shadow-xs" />
-                        <div className="flex items-center justify-between text-xs font-medium">
-                          <span className="text-slate-900">Latest Procedural Action</span>
-                          <span className="text-[11px] text-slate-400">{caseItem.lastUpdated}</span>
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-slate-500">
-                          {isOverdue
-                            ? 'SLA target exceeded. Escalation alert dispatched to bureau coordinator.'
-                            : 'Status verified. Institutional rejoinder pending review.'}
-                        </p>
-                      </div>
+                          {/* Milestone 3 */}
+                          <div className="relative mb-6">
+                            <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-amber-500 shadow-xs" />
+                            <div className="flex items-center justify-between text-xs font-medium">
+                              <span className="text-slate-900">Latest Procedural Action</span>
+                              <span className="text-[11px] text-slate-400">{caseItem.lastUpdated}</span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-slate-500">
+                              {isOverdue
+                                ? 'SLA target exceeded. Escalation alert dispatched to bureau coordinator.'
+                                : 'Status verified. Institutional rejoinder pending review.'}
+                            </p>
+                          </div>
+                        </>
+                      )}
 
                       {/* Milestone 4: Target Disposal */}
                       <div className="relative">

@@ -113,26 +113,26 @@ export function Sidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-40 flex flex-col border-r border-slate-200/80 bg-white transition-all duration-300 ease-in-out ${
+        className={`fixed top-0 bottom-0 left-0 z-40 flex flex-col border-r border-slate-200/80 bg-[#002b5c] text-white transition-all duration-300 ease-in-out ${
           isCollapsed ? 'w-20' : 'w-64'
         } ${
           isOpenMobile ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Brand / Logo Header */}
-        <div className="flex h-16 items-center justify-between border-b border-slate-200/80 px-4">
+        <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
           <Link href="/management" className="flex items-center gap-3 overflow-hidden">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#003366] text-white shadow-md">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white shadow-md">
               <ShieldCheck className="h-5 w-5 text-amber-300" />
             </div>
 
             {!isCollapsed && (
               <div className="flex flex-col truncate">
-                <span className="font-bold text-slate-900 text-sm tracking-tight flex items-center gap-1">
-                  AICTE <span className="font-normal text-xs text-blue-700">Oversight</span>
+                <span className="font-bold text-white text-sm tracking-tight flex items-center gap-1">
+                  CaseConnect
                 </span>
-                <span className="text-[10px] text-slate-500 truncate uppercase tracking-wider font-semibold">
-                  PGRC & Regulation Bureau
+                <span className="text-[10px] text-white/70 truncate uppercase tracking-wider font-semibold">
+                  Senior Management
                 </span>
               </div>
             )}
@@ -141,7 +141,7 @@ export function Sidebar({
           {/* Desktop Collapse Toggle Button */}
           <button
             onClick={onToggleCollapse}
-            className="hidden h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600 lg:flex focus:outline-none"
+            className="hidden h-7 w-7 items-center justify-center rounded-md border border-white/20 text-white/70 hover:bg-white/10 hover:text-white lg:flex focus:outline-none"
             title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isCollapsed ? (
@@ -152,22 +152,17 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Bureau Badges */}
+        {/* Role Badge */}
         {!isCollapsed && (
-          <div className="mx-3 mt-3.5 mb-1 rounded-lg bg-slate-50 p-2.5 border border-slate-100">
-            <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-              Integrated Bureaus
+          <div className="mx-3 mt-3.5 mb-1 rounded-lg bg-white/5 p-2.5 border border-white/10">
+            <div className="text-[10px] uppercase font-bold text-white/60 tracking-wider">
+              Role
             </div>
-            <div className="mt-1 flex items-center justify-between text-xs font-semibold">
-              <span className="flex items-center gap-1.5 text-blue-800">
-                <span className="h-2 w-2 rounded-full bg-blue-600" />
-                PGRC
-              </span>
-              <span className="text-slate-300">|</span>
-              <span className="flex items-center gap-1.5 text-amber-800">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                Regulation Bureau
-              </span>
+            <div className="mt-1 text-xs font-semibold text-white">
+              Senior Management
+            </div>
+            <div className="mt-0.5 text-[10px] text-white/60">
+              AICTE Central HQ Oversight
             </div>
           </div>
         )}
@@ -175,7 +170,7 @@ export function Sidebar({
         {/* Navigation List */}
         <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
           <div
-            className={`px-2 pb-1.5 text-[10px] font-semibold tracking-wider text-slate-400 uppercase ${
+            className={`px-2 pb-1.5 text-[10px] font-semibold tracking-wider text-white/40 uppercase ${
               isCollapsed ? 'text-center' : ''
             }`}
           >
@@ -194,15 +189,15 @@ export function Sidebar({
                 title={isCollapsed ? item.label : undefined}
                 className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
                   isActive
-                    ? 'bg-blue-50 text-blue-900 shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    ? 'bg-white/15 text-white shadow-xs'
+                    : 'text-white/80 hover:bg-white/10 hover:text-white'
                 } ${isCollapsed ? 'justify-center px-2' : ''}`}
               >
                 {/* Active indicator bar */}
                 {isActive && (
                   <motion.div
                     layoutId="activeIndicator"
-                    className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-md bg-blue-600"
+                    className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-md bg-amber-400"
                     transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                   />
                 )}
@@ -210,8 +205,8 @@ export function Sidebar({
                 <Icon
                   className={`h-4 w-4 shrink-0 transition-colors ${
                     isActive
-                      ? 'text-blue-700'
-                      : 'text-slate-400 group-hover:text-slate-600'
+                      ? 'text-amber-300'
+                      : 'text-white/70 group-hover:text-white'
                   }`}
                 />
 
@@ -222,7 +217,7 @@ export function Sidebar({
                 {!isCollapsed && item.badge && (
                   <span
                     className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                      item.badgeColor || 'bg-slate-100 text-slate-600'
+                      item.badgeColor || 'bg-white/10 text-white'
                     }`}
                   >
                     {item.badge}
@@ -231,22 +226,45 @@ export function Sidebar({
               </Link>
             );
           })}
+
+          <Link
+            href="/pgrc-dashboard"
+            className={`mt-4 group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all text-white/80 hover:bg-white/10 hover:text-white ${
+              isCollapsed ? 'justify-center px-2' : ''
+            }`}
+          >
+            <ShieldCheck className="h-4 w-4 shrink-0 text-white/70 group-hover:text-white" />
+            {!isCollapsed && (
+              <span className="truncate flex-1 text-left">PGRC Official Dashboard</span>
+            )}
+          </Link>
+          <Link
+            href="/"
+            className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all text-white/80 hover:bg-white/10 hover:text-white ${
+              isCollapsed ? 'justify-center px-2' : ''
+            }`}
+          >
+            <FileCheck2 className="h-4 w-4 shrink-0 text-white/70 group-hover:text-white" />
+            {!isCollapsed && (
+              <span className="truncate flex-1 text-left">Switch Role / Home</span>
+            )}
+          </Link>
         </nav>
 
         {/* Bottom AICTE System Info */}
-        <div className="border-t border-slate-200/80 p-3">
+        <div className="border-t border-white/10 p-3">
           {!isCollapsed ? (
-            <div className="rounded-lg bg-slate-50/80 p-2.5 border border-slate-100 text-[11px] text-slate-600">
-              <div className="flex items-center gap-1.5 font-semibold text-slate-800">
-                <FileCheck2 className="h-3.5 w-3.5 text-blue-600" />
-                <span>AICTE Portal v1.0.4</span>
+            <div className="rounded-lg bg-white/5 p-2.5 border border-white/10 text-[11px] text-white/80">
+              <div className="flex items-center gap-1.5 font-semibold text-white">
+                <FileCheck2 className="h-3.5 w-3.5 text-amber-300" />
+                <span>AICTE CaseConnect v1.0.4</span>
               </div>
-              <p className="mt-1 text-[10px] text-slate-500 leading-tight">
+              <p className="mt-1 text-[10px] text-white/60 leading-tight">
                 National Grievance Oversight • HQ New Delhi
               </p>
             </div>
           ) : (
-            <div className="flex justify-center text-slate-400">
+            <div className="flex justify-center text-white/50">
               <FileCheck2 className="h-4 w-4" />
             </div>
           )}

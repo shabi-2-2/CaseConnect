@@ -33,7 +33,7 @@ const priorityWeight: Record<CasePriority, number> = {
 
 export default function AllCasesPage() {
   const shouldReduceMotion = useReducedMotion();
-  const { cases, toggleCaseFlag } = useManagementData();
+  const { cases, toggleCaseFlag, refreshData } = useManagementData();
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -792,6 +792,11 @@ export default function AllCasesPage() {
         onViewRelatedCase={(caseNum) => {
           const found = cases.find((c) => c.caseNumber === caseNum);
           if (found) setSelectedCase(found);
+        }}
+        allowStatusEdit={true}
+        onStatusUpdated={(updated) => {
+          setSelectedCase(updated);
+          refreshData();
         }}
       />
     </div>

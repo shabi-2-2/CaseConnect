@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CaseItem,
   InstitutionItem,
@@ -16,34 +16,11 @@ import {
   SAMPLE_OVERLAPS,
   SAMPLE_NOTIFICATIONS,
 } from '@/data/mockData';
+import { fetchComplaints, updateComplaint } from '@/lib/complaints-api';
 
 const STORAGE_KEYS = {
-  CASES: 'caseconnect_mgmt_cases_v1',
-  OVERLAPS: 'caseconnect_mgmt_overlaps_v1',
   NOTIFICATIONS: 'caseconnect_mgmt_notifications_v1',
 };
-
-export function getInitialCases(): CaseItem[] {
-  if (typeof window === 'undefined') return SAMPLE_CASES;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.CASES);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.error('Failed reading cases from localStorage', e);
-  }
-  return SAMPLE_CASES;
-}
-
-export function getInitialOverlaps(): OverlapAlertItem[] {
-  if (typeof window === 'undefined') return SAMPLE_OVERLAPS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.OVERLAPS);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.error('Failed reading overlaps from localStorage', e);
-  }
-  return SAMPLE_OVERLAPS;
-}
 
 export function getInitialNotifications(): NotificationItem[] {
   if (typeof window === 'undefined') return SAMPLE_NOTIFICATIONS;
@@ -57,30 +34,60 @@ export function getInitialNotifications(): NotificationItem[] {
 }
 
 export function useManagementData() {
-  const [cases, setCases] = useState<CaseItem[]>(() => getInitialCases());
-  const [overlaps, setOverlaps] = useState<OverlapAlertItem[]>(() => getInitialOverlaps());
+  const [cases, setCases] = useState<CaseItem[]>(SAMPLE_CASES);
+  const [overlaps, setOverlaps] = useState<OverlapAlertItem[]>(SAMPLE_OVERLAPS);
+  const [institutions, setInstitutions] = useState<InstitutionItem[]>(SAMPLE_INSTITUTIONS);
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => getInitialNotifications());
-  const [institutions] = useState<InstitutionItem[]>(SAMPLE_INSTITUTIONS);
-  const [isLoaded] = useState(true);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const isMountedRef = useRef(true);
 
-  // Save changes to localStorage
-  const saveCases = (updated: CaseItem[]) => {
-    setCases(updated);
+  // Fetch from SQLite APIs
+  const refreshData = useCallback(async () => {
     try {
-      localStorage.setItem(STORAGE_KEYS.CASES, JSON.stringify(updated));
-    } catch (e) {
-      console.error(e);
-    }
-  };
+      const [casesRes, overlapsRes, institutionsRes] = await Promise.allSettled([
+        fetchComplaints(),
+        fetch('/api/overlaps', { cache: 'no-store' }).then((r) => r.json()),
+        fetch('/api/institutions', { cache: 'no-store' }).then((r) => r.json()),
+      ]);
 
-  const saveOverlaps = (updated: OverlapAlertItem[]) => {
-    setOverlaps(updated);
-    try {
-      localStorage.setItem(STORAGE_KEYS.OVERLAPS, JSON.stringify(updated));
-    } catch (e) {
-      console.error(e);
+      if (!isMountedRef.current) return;
+
+      if (casesRes.status === 'fulfilled' && Array.isArray(casesRes.value) && casesRes.value.length > 0) {
+        setCases(casesRes.value);
+      }
+
+      if (overlapsRes.status === 'fulfilled' && Array.isArray(overlapsRes.value?.overlaps)) {
+        setOverlaps(overlapsRes.value.overlaps);
+      }
+
+      if (institutionsRes.status === 'fulfilled' && Array.isArray(institutionsRes.value?.institutions)) {
+        setInstitutions(institutionsRes.value.institutions);
+      }
+    } catch (err) {
+      console.error('Failed to sync management data with SQLite backend', err);
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoaded(true);
+        setIsLoading(false);
+      }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    refreshData();
+
+    // Polling every 8 seconds to synchronize across all dashboards
+    const interval = setInterval(() => {
+      refreshData();
+    }, 8000);
+
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+    };
+  }, [refreshData]);
 
   const saveNotifications = (updated: NotificationItem[]) => {
     setNotifications(updated);
@@ -91,18 +98,32 @@ export function useManagementData() {
     }
   };
 
-  // 1. Toggle Case Attention Flag
-  const toggleCaseFlag = (caseId: string) => {
-    const next = cases.map((c) =>
-      c.id === caseId || c.caseNumber === caseId
-        ? { ...c, managementFlagged: !c.managementFlagged }
-        : c
+  // 1. Toggle Case Attention Flag - persists in SQLite
+  const toggleCaseFlag = async (caseId: string) => {
+    const target = cases.find((c) => c.id === caseId || c.caseNumber === caseId);
+    if (!target) return;
+
+    const nextFlag = !target.managementFlagged;
+    setCases((prev) =>
+      prev.map((c) =>
+        c.id === caseId || c.caseNumber === caseId
+          ? { ...c, managementFlagged: nextFlag }
+          : c
+      )
     );
-    saveCases(next);
+
+    try {
+      await updateComplaint(target.id, { managementFlagged: nextFlag });
+    } catch (e) {
+      console.error('Failed to save flag to SQLite', e);
+    }
   };
 
-  // 2. Add Management Note
-  const addManagementNote = (caseId: string, content: string) => {
+  // 2. Add Management Note - persists in SQLite
+  const addManagementNote = async (caseId: string, content: string) => {
+    const target = cases.find((c) => c.id === caseId || c.caseNumber === caseId);
+    if (!target) return;
+
     const newNote: ManagementNote = {
       id: `note-${Date.now()}`,
       author: 'Dr. R. K. Sharma',
@@ -111,23 +132,31 @@ export function useManagementData() {
       content,
     };
 
-    const next = cases.map((c) => {
-      if (c.id === caseId || c.caseNumber === caseId) {
-        return {
-          ...c,
-          managementNotes: [newNote, ...(c.managementNotes || [])],
-        };
-      }
-      return c;
-    });
-    saveCases(next);
+    const nextNotes = [newNote, ...(target.managementNotes || [])];
+
+    setCases((prev) =>
+      prev.map((c) =>
+        c.id === caseId || c.caseNumber === caseId
+          ? { ...c, managementNotes: nextNotes }
+          : c
+      )
+    );
+
+    try {
+      await updateComplaint(target.id, { managementNotes: nextNotes });
+    } catch (e) {
+      console.error('Failed to save management note to SQLite', e);
+    }
   };
 
-  // 3. Set Case Follow-up Details
-  const setCaseFollowUp = (
+  // 3. Set Case Follow-up Details - persists in SQLite
+  const setCaseFollowUp = async (
     caseId: string,
     details: { owner: string; deadline: string; instructions?: string }
   ) => {
+    const target = cases.find((c) => c.id === caseId || c.caseNumber === caseId);
+    if (!target) return;
+
     const followUp: FollowUpDetails = {
       owner: details.owner,
       deadline: details.deadline,
@@ -136,14 +165,21 @@ export function useManagementData() {
       assignedAt: new Date().toISOString().substring(0, 10),
     };
 
-    const next = cases.map((c) =>
-      c.id === caseId || c.caseNumber === caseId ? { ...c, followUp } : c
+    setCases((prev) =>
+      prev.map((c) =>
+        c.id === caseId || c.caseNumber === caseId ? { ...c, followUp } : c
+      )
     );
-    saveCases(next);
+
+    try {
+      await updateComplaint(target.id, { followUp });
+    } catch (e) {
+      console.error('Failed to save follow-up to SQLite', e);
+    }
   };
 
-  // 4. Update Overlap Review Status
-  const updateOverlapStatus = (
+  // 4. Update Overlap Review Status - persists in SQLite overlap_alerts table
+  const updateOverlapStatus = async (
     overlapId: string,
     newStatus: OverlapReviewStatus,
     reviewNotes?: string
@@ -151,44 +187,42 @@ export function useManagementData() {
     const reviewer = 'Dr. R. K. Sharma (Sr. Director)';
     const reviewedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
 
-    const nextOverlaps = overlaps.map((ovr) => {
-      if (ovr.id === overlapId || ovr.alertNumber === overlapId) {
-        return {
-          ...ovr,
-          reviewStatus: newStatus,
-          reviewedBy: reviewer,
-          reviewedAt,
-          reviewNotes: reviewNotes || ovr.reviewNotes,
-        };
-      }
-      return ovr;
-    });
-    saveOverlaps(nextOverlaps);
-
-    // Also reflect into related cases' overlapDetails.reviewStatus
-    const targetOverlap = overlaps.find(
-      (o) => o.id === overlapId || o.alertNumber === overlapId
-    );
-    if (targetOverlap) {
-      const nextCases = cases.map((c) => {
-        if (
-          c.caseNumber === targetOverlap.case1.caseNumber ||
-          c.caseNumber === targetOverlap.case2.caseNumber
-        ) {
+    // Optimistic UI update
+    setOverlaps((prev) =>
+      prev.map((ovr) => {
+        if (ovr.id === overlapId || ovr.alertNumber === overlapId) {
           return {
-            ...c,
-            overlapDetails: c.overlapDetails
-              ? { ...c.overlapDetails, reviewStatus: newStatus }
-              : undefined,
+            ...ovr,
+            reviewStatus: newStatus,
+            reviewedBy: reviewer,
+            reviewedAt,
+            reviewNotes: reviewNotes || ovr.reviewNotes,
           };
         }
-        return c;
+        return ovr;
+      })
+    );
+
+    try {
+      const res = await fetch('/api/overlaps', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: overlapId,
+          reviewStatus: newStatus,
+          reviewedBy: reviewer,
+          reviewNotes,
+        }),
       });
-      saveCases(nextCases);
+      if (!res.ok) throw new Error('Failed to update overlap status');
+      // Refresh to ensure full synchronization with complaints and institutions
+      refreshData();
+    } catch (e) {
+      console.error('Failed to update overlap status in SQLite', e);
     }
   };
 
-  // 5. Mark Notification As Read / All As Read
+  // 5. Notifications
   const markNotificationAsRead = (id: string) => {
     const next = notifications.map((n) => (n.id === id ? { ...n, unread: false } : n));
     saveNotifications(next);
@@ -205,6 +239,8 @@ export function useManagementData() {
     overlaps,
     notifications,
     isLoaded,
+    isLoading,
+    refreshData,
     toggleCaseFlag,
     addManagementNote,
     setCaseFollowUp,

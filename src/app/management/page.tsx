@@ -107,11 +107,11 @@ export default function SeniorManagementDashboard() {
   };
 
   const navItems = [
-    { id: 'overview' as NavTab, label: 'Overview', icon: LayoutDashboard, badge: null },
-    { id: 'institutions' as NavTab, label: 'Institution Directory', icon: Building2, badge: null },
-    { id: 'cases' as NavTab, label: 'All Cases', icon: FolderKanban, badge: '1,482' },
-    { id: 'overlaps' as NavTab, label: 'Overlap Detection Centre', icon: CopyCheck, badge: '18', badgeColor: 'bg-purple-100 text-purple-700 font-bold' },
-    { id: 'reports' as NavTab, label: 'Reports & Analytics', icon: BarChart3, badge: null },
+    { id: 'overview' as NavTab, label: 'Overview', icon: LayoutDashboard, badge: null, href: '/management' },
+    { id: 'institutions' as NavTab, label: 'Institution Directory', icon: Building2, badge: null, href: '/management/institutions' },
+    { id: 'cases' as NavTab, label: 'All Cases', icon: FolderKanban, badge: '1,482', href: '/management/cases' },
+    { id: 'overlaps' as NavTab, label: 'Overlap Detection Centre', icon: CopyCheck, badge: '18', badgeColor: 'bg-purple-100 text-purple-700 font-bold', href: '/management/overlaps' },
+    { id: 'reports' as NavTab, label: 'Reports & Analytics', icon: BarChart3, badge: null, href: '/management/reports' },
   ];
 
   return (
@@ -151,8 +151,9 @@ export default function SeniorManagementDashboard() {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
-              <button
+              <Link
                 key={item.id}
+                href={item.href}
                 onClick={() => {
                   setActiveTab(item.id);
                   if (isSidebarOpenMobile) setIsSidebarOpenMobile(false);
@@ -176,7 +177,7 @@ export default function SeniorManagementDashboard() {
                     {item.badge}
                   </span>
                 )}
-              </button>
+              </Link>
             );
           })}
           <Link href="/pgrc-dashboard" className={`mt-4 group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all text-white/80 hover:bg-white/10 hover:text-white ${isCollapsed ? 'justify-center px-2' : ''}`}>
