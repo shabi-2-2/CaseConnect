@@ -297,7 +297,15 @@ export default function RegulationBureauDashboard() {
         </main>
       </div>
 
-      <CaseDetailsModal selectedCase={selectedCase} onClose={() => setSelectedCase(null)} />
+      <CaseDetailsModal
+        selectedCase={selectedCase}
+        onClose={() => setSelectedCase(null)}
+        onStatusUpdated={(updated) => {
+          setAllCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+          setSelectedCase(updated);
+        }}
+        allowStatusEdit={true}
+      />
     </div>
   );
 }

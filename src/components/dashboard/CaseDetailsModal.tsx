@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -12,29 +12,53 @@ import {
   FileText,
   ExternalLink,
   Gavel,
+  Edit3,
+  Check,
 } from 'lucide-react';
 import { CaseItem } from '@/types/dashboard';
 import { formatDate } from '@/lib/utils';
+import { updateComplaint } from '@/lib/complaints-api';
 
 interface CaseDetailsModalProps {
   selectedCase: CaseItem | null;
   onClose: () => void;
   onViewRelatedCase?: (relatedCaseNumber: string) => void;
+  onStatusUpdated?: (updated: CaseItem) => void;
+  allowStatusEdit?: boolean;
 }
+
+const STATUS_OPTIONS: CaseItem['status'][] = ['Pending', 'Under Process', 'Disposed', 'Overdue'];
 
 export function CaseDetailsModal({
   selectedCase,
   onClose,
   onViewRelatedCase,
+  onStatusUpdated,
+  allowStatusEdit = true,
 }: CaseDetailsModalProps) {
+  const [isEditingStatus, setIsEditingStatus] = useState(false);
+  const [statusValue, setStatusValue] = useState<CaseItem['status']>('Pending');
+  const [isSaving, setIsSaving] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusSuccess, setStatusSuccess] = useState(false);
+
   // Close on Escape key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !isSaving) onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, isSaving]);
+
+  useEffect(() => {
+    if (selectedCase) {
+      setStatusValue(selectedCase.status);
+      setIsEditingStatus(false);
+      setStatusError(null);
+      setStatusSuccess(false);
+    }
+  }, [selectedCase]);
 
   if (!selectedCase) return null;
 
@@ -96,13 +120,80 @@ export function CaseDetailsModal({
                 <span className="font-mono font-bold text-sm text-slate-900">
                   {selectedCase.caseNumber}
                 </span>
-                <span
-                  className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getStatusBadge(
-                    selectedCase.status
-                  )}`}
-                >
-                  {selectedCase.status}
-                </span>
+                {!isEditingStatus ? (
+                  <span
+                    className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getStatusBadge(
+                      statusValue
+                    )}`}
+                  >
+                    {statusValue}
+                  </span>
+                ) : (
+                  <select
+                    value={statusValue}
+                    onChange={(e) => setStatusValue(e.target.value as CaseItem['status'])}
+                    disabled={isSaving}
+                    className="rounded-md border border-slate-300 px-2 py-0.5 text-[11px] font-semibold"
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {allowStatusEdit && !isEditingStatus && (
+                  <button
+                    onClick={() => {
+                      setStatusValue(selectedCase.status);
+                      setIsEditingStatus(true);
+                      setStatusError(null);
+                      setStatusSuccess(false);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <Edit3 className="h-3 w-3" />
+                    Edit Status
+                  </button>
+                )}
+                {isEditingStatus && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      disabled={isSaving}
+                      onClick={async () => {
+                        setIsSaving(true);
+                        setStatusError(null);
+                        setStatusSuccess(false);
+                        try {
+                          const updated = await updateComplaint(selectedCase.id, { status: statusValue });
+                          setStatusSuccess(true);
+                          onStatusUpdated?.(updated);
+                          setTimeout(() => setIsEditingStatus(false), 600);
+                        } catch (err: any) {
+                          setStatusError(err?.message || 'Failed to update status');
+                        } finally {
+                          setIsSaving(false);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md bg-[#003366] px-2 py-0.5 text-[10px] font-semibold text-white disabled:opacity-60"
+                    >
+                      <Check className="h-3 w-3" />
+                      {isSaving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      disabled={isSaving}
+                      onClick={() => {
+                        setStatusValue(selectedCase.status);
+                        setIsEditingStatus(false);
+                        setStatusError(null);
+                        setStatusSuccess(false);
+                      }}
+                      className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
                 <span
                   className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${getPriorityBadge(
                     selectedCase.priority
@@ -120,6 +211,12 @@ export function CaseDetailsModal({
                   {selectedCase.bureau}
                 </span>
               </div>
+              {(statusError || statusSuccess) && (
+                <div className="mt-1 text-[10px]">
+                  {statusError && <span className="text-rose-600">{statusError}</span>}
+                  {statusSuccess && <span className="text-emerald-600">Status updated successfully</span>}
+                </div>
+              )}
               <h2 className="mt-1.5 font-bold text-base text-slate-900 leading-snug">
                 {selectedCase.institutionName}
               </h2>

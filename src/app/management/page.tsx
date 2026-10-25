@@ -277,7 +277,16 @@ export default function SeniorManagementDashboard() {
         </main>
       </div>
 
-      <CaseDetailsModal selectedCase={selectedCase} onClose={() => setSelectedCase(null)} onViewRelatedCase={handleViewRelatedCase} />
+      <CaseDetailsModal
+        selectedCase={selectedCase}
+        onClose={() => setSelectedCase(null)}
+        onViewRelatedCase={handleViewRelatedCase}
+        onStatusUpdated={(updated) => {
+          setAllCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+          setSelectedCase(updated);
+        }}
+        allowStatusEdit={true}
+      />
     </div>
   );
 }
