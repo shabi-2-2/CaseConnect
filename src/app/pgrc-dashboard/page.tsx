@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
+import { PgrcSidebar } from '@/components/layout/PgrcSidebar';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { StatusDonutChart } from '@/components/charts/StatusDonutChart';
 import { CaseDetailsModal } from '@/components/dashboard/CaseDetailsModal';
@@ -37,7 +38,7 @@ type PGRCSidebarTab =
 export default function PGRCDashboardPage() {
   const [activeTab, setActiveTab] = useState<PGRCSidebarTab>('overview');
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
-  const [isCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -292,72 +293,17 @@ export default function PGRCDashboardPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex">
       {/* Sidebar */}
-      <aside
-        className={`fixed top-0 bottom-0 left-0 z-40 flex flex-col border-r border-slate-200/80 bg-[#002b5c] text-white transition-all duration-300 ease-in-out ${
-          isCollapsed ? 'w-20' : 'w-64'
-        } ${isSidebarOpenMobile ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
-      >
-        <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white shadow-md">
-              <ShieldCheck className="h-5 w-5 text-amber-300" />
-            </div>
-            {!isCollapsed && (
-              <div className="flex flex-col truncate">
-                <span className="font-bold text-white text-sm tracking-tight">CaseConnect</span>
-                <span className="text-[10px] text-white/70 truncate uppercase tracking-wider font-semibold">
-                  PGRC Official
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {!isCollapsed && (
-          <div className="mx-3 mt-3.5 mb-1 rounded-lg bg-white/5 p-2.5 border border-white/10">
-            <div className="text-[10px] uppercase font-bold text-white/60 tracking-wider">
-              Role
-            </div>
-            <div className="mt-1 text-xs font-semibold text-white">PGRC Official</div>
-            <div className="mt-0.5 text-[10px] text-white/60">Grievance Redressal Cell</div>
-          </div>
-        )}
-
-        <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
-          <div className={`px-2 pb-1.5 text-[10px] font-semibold tracking-wider text-white/40 uppercase ${isCollapsed ? 'text-center' : ''}`}>
-            {isCollapsed ? '•••' : 'PGRC Navigation'}
-          </div>
-          {sidebarNav.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  if (isSidebarOpenMobile) setIsSidebarOpenMobile(false);
-                }}
-                title={isCollapsed ? item.label : undefined}
-                className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
-                  isActive ? 'bg-white/15 text-white shadow-xs' : 'text-white/80 hover:bg-white/10 hover:text-white'
-                } ${isCollapsed ? 'justify-center px-2' : ''}`}
-              >
-                {isActive && <motion.div layoutId="pgrcActive" className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-md bg-amber-400" transition={{ type: 'spring', stiffness: 300, damping: 30 }} />}
-                <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-amber-300' : 'text-white/70 group-hover:text-white'}`} />
-                {!isCollapsed && <span className="truncate flex-1 text-left">{item.label}</span>}
-              </button>
-            );
-          })}
-          <Link href="/" className={`mt-4 group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all text-white/80 hover:bg-white/10 hover:text-white ${isCollapsed ? 'justify-center px-2' : ''}`}>
-            <ShieldCheck className="h-4 w-4 shrink-0 text-white/70 group-hover:text-white" />
-            {!isCollapsed && <span className="truncate flex-1 text-left">Executive Dashboard</span>}
-          </Link>
-        </nav>
-      </aside>
-
-      {isSidebarOpenMobile && (
-        <div className="fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-xs lg:hidden" onClick={() => setIsSidebarOpenMobile(false)} />
-      )}
+      <PgrcSidebar
+        activeTab="overview"
+        isOpenMobile={isSidebarOpenMobile}
+        onCloseMobile={() => setIsSidebarOpenMobile(false)}
+        isCollapsed={isCollapsed}
+        onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+        badgeCounts={{
+          cases: pgrcCases.length,
+          overlaps: overlapItems.length,
+        }}
+      />
 
       <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${isCollapsed ? 'lg:pl-20' : 'lg:pl-64'}`}>
         <Navbar

@@ -107,12 +107,35 @@ function initSchema(database: Database.Database) {
     );
   `);
 
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS coordination_requests (
+      id TEXT PRIMARY KEY,
+      request_number TEXT,
+      linked_case_id TEXT,
+      linked_case_number TEXT,
+      institution_name TEXT,
+      institution_code TEXT,
+      requesting_bureau TEXT,
+      target_bureau TEXT,
+      title TEXT,
+      description TEXT,
+      priority TEXT,
+      assigned_owner TEXT,
+      status TEXT DEFAULT 'Awaiting RB Response',
+      follow_up_deadline TEXT,
+      remarks_json TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
   database.exec(`CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status);`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_complaints_institution_name ON complaints(institution_name);`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_complaints_submission_date ON complaints(submission_date);`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_complaints_bureau ON complaints(bureau);`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_overlaps_review_status ON overlap_alerts(review_status);`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_case_history_case_id ON case_history(case_id);`);
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_coordination_status ON coordination_requests(status);`);
 }
 
 function seedFromMock(database: Database.Database) {
@@ -261,6 +284,137 @@ function seedFromMock(database: Database.Database) {
 
     historyTx(SAMPLE_CASES);
   }
+
+  // Seed coordination_requests if empty
+  const countCoord = database.prepare('SELECT COUNT(*) as count FROM coordination_requests').get() as { count: number };
+  if (countCoord.count === 0) {
+    const insertCoord = database.prepare(`
+      INSERT INTO coordination_requests (
+        id, request_number, linked_case_id, linked_case_number, institution_name, institution_code,
+        requesting_bureau, target_bureau, title, description, priority, assigned_owner, status,
+        follow_up_deadline, remarks_json, created_at, updated_at
+      ) VALUES (
+        @id, @request_number, @linked_case_id, @linked_case_number, @institution_name, @institution_code,
+        @requesting_bureau, @target_bureau, @title, @description, @priority, @assigned_owner, @status,
+        @follow_up_deadline, @remarks_json, @created_at, @updated_at
+      )
+    `);
+
+    const initialCoords = [
+      {
+        id: 'cr-001',
+        request_number: 'CR-2026-081',
+        linked_case_id: 'case-001',
+        linked_case_number: 'AICTE/PGRC/2026/8841',
+        institution_name: 'Apex Institute of Technology & Engineering',
+        institution_code: '1-3329182741',
+        requesting_bureau: 'PGRC',
+        target_bureau: 'Regulation Bureau',
+        title: 'Joint Audit for Capitation Levy & Fee Ledger Verification',
+        description: 'PGRC received student complaints regarding withholding degrees for capitation charges. Requesting RB inspection report on approved fee structures.',
+        priority: 'Critical',
+        assigned_owner: 'Dr. K. S. Rathore',
+        status: 'Awaiting RB Response',
+        follow_up_deadline: '2026-11-05',
+        remarks_json: JSON.stringify([
+          {
+            id: 'rem-1',
+            author: 'PGRC Scrutiny Officer',
+            role: 'PGRC Official',
+            text: 'Dispatched formal query to Regulation Bureau coordinator citing Section 10(b) inquiry.',
+            timestamp: '2026-10-22 11:30',
+          },
+        ]),
+        created_at: '2026-10-22 11:30:00',
+        updated_at: '2026-10-22 11:30:00',
+      },
+      {
+        id: 'cr-002',
+        request_number: 'CR-2026-082',
+        linked_case_id: 'case-003',
+        linked_case_number: 'AICTE/PGRC/2026/6612',
+        institution_name: 'Kalinga Regional Engineering College',
+        institution_code: '1-4491028374',
+        requesting_bureau: 'PGRC',
+        target_bureau: 'Regulation Bureau',
+        title: 'Faculty Cadre Ratio & Sanctioned Intake Scrutiny',
+        description: 'Verify if the 4-year technical approval conditions were satisfied prior to addressing faculty termination grievance.',
+        priority: 'High',
+        assigned_owner: 'Er. Ramesh Verma',
+        status: 'In Joint Review',
+        follow_up_deadline: '2026-10-30',
+        remarks_json: JSON.stringify([
+          {
+            id: 'rem-2',
+            author: 'RB Joint Director',
+            role: 'Regulation Bureau Official',
+            text: 'Physical audit report dated 14 Sep 2026 attached. Preliminary findings show deficiency in CSE department.',
+            timestamp: '2026-10-24 16:15',
+          },
+        ]),
+        created_at: '2026-10-20 14:00:00',
+        updated_at: '2026-10-24 16:15:00',
+      },
+      {
+        id: 'cr-003',
+        request_number: 'CR-2026-083',
+        linked_case_id: 'case-004',
+        linked_case_number: 'AICTE/PGRC/2026/7721',
+        institution_name: 'Saraswati Global Business School',
+        institution_code: '1-2291038472',
+        requesting_bureau: 'Regulation Bureau',
+        target_bureau: 'PGRC',
+        title: 'Fee Refund Directive Compliance Verification',
+        description: 'Regulation Bureau issued compliance notice. Confirm if the student grievants have received certified RTGS refund credits.',
+        priority: 'Medium',
+        assigned_owner: 'Dr. Ananya Sen',
+        status: 'Awaiting PGRC Action',
+        follow_up_deadline: '2026-11-02',
+        remarks_json: JSON.stringify([
+          {
+            id: 'rem-3',
+            author: 'RB Grievance Cell',
+            role: 'Regulation Bureau Official',
+            text: 'Institution claims full refund processed on 18 Oct. Awaiting complainant confirmation from PGRC.',
+            timestamp: '2026-10-23 09:45',
+          },
+        ]),
+        created_at: '2026-10-23 09:45:00',
+        updated_at: '2026-10-23 09:45:00',
+      },
+      {
+        id: 'cr-004',
+        request_number: 'CR-2026-079',
+        linked_case_id: 'case-009',
+        linked_case_number: 'AICTE/PGRC/2026/1044',
+        institution_name: 'Royal College of Polytechnic & Technology',
+        institution_code: '1-4410293810',
+        requesting_bureau: 'PGRC',
+        target_bureau: 'Regulation Bureau',
+        title: 'Mechanical Workshop Safety Certification Reconciliation',
+        description: 'Student safety grievance regarding workshop machinery. Reconciled with state fire & factory inspectorate certification.',
+        priority: 'Low',
+        assigned_owner: 'Dr. Rajeshwar Rao',
+        status: 'Resolved',
+        follow_up_deadline: '2026-10-20',
+        remarks_json: JSON.stringify([
+          {
+            id: 'rem-4',
+            author: 'PGRC Regional Officer',
+            role: 'PGRC Official',
+            text: 'Institution submitted compliant fitness report and upgraded safety gear. Joint inspection cleared.',
+            timestamp: '2026-10-20 17:00',
+          },
+        ]),
+        created_at: '2026-10-10 10:00:00',
+        updated_at: '2026-10-20 17:00:00',
+      },
+    ];
+
+    for (const cr of initialCoords) {
+      insertCoord.run(cr);
+    }
+  }
 }
 
 export function getDb() {
@@ -401,5 +555,32 @@ export function rowToOverlap(row: any) {
     reviewedBy: row.reviewed_by,
     reviewedAt: row.reviewed_at,
     reviewNotes: row.review_notes,
+  };
+}
+
+export function rowToCoordinationRequest(row: any) {
+  let remarks = [];
+  try {
+    if (row.remarks_json) remarks = JSON.parse(row.remarks_json);
+  } catch {}
+
+  return {
+    id: row.id,
+    requestNumber: row.request_number,
+    linkedCaseId: row.linked_case_id,
+    linkedCaseNumber: row.linked_case_number,
+    institutionName: row.institution_name,
+    institutionCode: row.institution_code,
+    requestingBureau: row.requesting_bureau,
+    targetBureau: row.target_bureau,
+    title: row.title,
+    description: row.description,
+    priority: row.priority,
+    assignedOwner: row.assigned_owner,
+    status: row.status,
+    followUpDeadline: row.follow_up_deadline,
+    remarks,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
