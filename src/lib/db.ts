@@ -129,6 +129,26 @@ function initSchema(database: Database.Database) {
     );
   `);
 
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS regulatory_notices (
+      id TEXT PRIMARY KEY,
+      notice_number TEXT,
+      case_id TEXT,
+      case_number TEXT,
+      institution_name TEXT,
+      institution_code TEXT,
+      notice_type TEXT,
+      reason TEXT,
+      notice_date TEXT,
+      response_deadline TEXT,
+      remarks TEXT,
+      supporting_docs TEXT,
+      issued_by TEXT,
+      status TEXT DEFAULT 'Issued',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
   database.exec(`CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status);`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_complaints_institution_name ON complaints(institution_name);`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_complaints_submission_date ON complaints(submission_date);`);
@@ -136,6 +156,8 @@ function initSchema(database: Database.Database) {
   database.exec(`CREATE INDEX IF NOT EXISTS idx_overlaps_review_status ON overlap_alerts(review_status);`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_case_history_case_id ON case_history(case_id);`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_coordination_status ON coordination_requests(status);`);
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_notices_case_id ON regulatory_notices(case_id);`);
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_notices_institution ON regulatory_notices(institution_code);`);
 }
 
 function seedFromMock(database: Database.Database) {
@@ -415,6 +437,63 @@ function seedFromMock(database: Database.Database) {
       insertCoord.run(cr);
     }
   }
+
+  // Seed regulatory_notices if empty
+  const countNotices = database.prepare('SELECT COUNT(*) as count FROM regulatory_notices').get() as { count: number };
+  if (countNotices.count === 0) {
+    const insertNotice = database.prepare(`
+      INSERT INTO regulatory_notices (
+        id, notice_number, case_id, case_number, institution_name, institution_code,
+        notice_type, reason, notice_date, response_deadline, remarks, supporting_docs,
+        issued_by, status, created_at
+      ) VALUES (
+        @id, @notice_number, @case_id, @case_number, @institution_name, @institution_code,
+        @notice_type, @reason, @notice_date, @response_deadline, @remarks, @supporting_docs,
+        @issued_by, @status, @created_at
+      )
+    `);
+
+    const initialNotices = [
+      {
+        id: 'not-001',
+        notice_number: 'RN-2026-041',
+        case_id: 'case-002',
+        case_number: 'AICTE/REG/2026/0412',
+        institution_name: 'Metro City College of Engineering',
+        institution_code: '1-2098471625',
+        notice_type: 'Show Cause Notice',
+        reason: 'Unapproved AI & Data Science intake expansion and unauthorized section creation in violation of AICTE Approval Process Handbook (APH) 2026-27.',
+        notice_date: '2026-10-18',
+        response_deadline: '2026-11-02',
+        remarks: 'Hearing scheduled before Scrutiny Committee. Institution directed to produce council sanction and faculty register.',
+        supporting_docs: 'Inspection Report RB/IR/2026/09; GIS Geo-tag photos',
+        issued_by: 'Er. Sandeep Mukherjee, Director (Regulation)',
+        status: 'Issued',
+        created_at: '2026-10-18 11:00:00',
+      },
+      {
+        id: 'not-002',
+        notice_number: 'RN-2026-042',
+        case_id: 'case-005',
+        case_number: 'AICTE/REG/2026/1102',
+        institution_name: 'National Technical Academy',
+        institution_code: '1-9874102938',
+        notice_type: 'Compliance Directive',
+        reason: 'Severe faculty cadre ratio deficiency (1:35 against mandatory 1:20 norm) in Mechanical and Civil Engineering disciplines.',
+        notice_date: '2026-10-12',
+        response_deadline: '2026-10-27',
+        remarks: 'Mandatory rectification deadline set. Non-compliance shall attract intake curtailment for AY 2027-28.',
+        supporting_docs: 'Annual Faculty Return (AFR) audit summary; EPF contribution ledger',
+        issued_by: 'Dr. Anita Desai, Joint Director',
+        status: 'Issued',
+        created_at: '2026-10-12 14:30:00',
+      },
+    ];
+
+    for (const not of initialNotices) {
+      insertNotice.run(not);
+    }
+  }
 }
 
 export function getDb() {
@@ -584,3 +663,24 @@ export function rowToCoordinationRequest(row: any) {
     updatedAt: row.updated_at,
   };
 }
+
+export function rowToNotice(row: any) {
+  return {
+    id: row.id,
+    noticeNumber: row.notice_number,
+    caseId: row.case_id,
+    caseNumber: row.case_number,
+    institutionName: row.institution_name,
+    institutionCode: row.institution_code,
+    noticeType: row.notice_type,
+    reason: row.reason,
+    noticeDate: row.notice_date,
+    responseDeadline: row.response_deadline,
+    remarks: row.remarks,
+    supportingDocs: row.supporting_docs,
+    issuedBy: row.issued_by,
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
