@@ -207,3 +207,21 @@ export interface CustomChartTooltipProps {
   payload?: ChartTooltipPayloadItem[];
   label?: string;
 }
+
+export interface NoticeItem {
+  id: string;
+  noticeNumber: string;
+  caseId: string;
+  caseNumber: string;
+  institutionName: string;
+  institutionCode: string;
+  noticeType: string;
+  reason: string;
+  noticeDate: string;
+  responseDeadline: string;
+  remarks: string;
+  supportingDocs?: string;
+  issuedBy: string;
+  status: string;
+  createdAt?: string;
+}
