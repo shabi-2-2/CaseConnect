@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb, rowToComplaint } from '@/lib/db';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { rowToComplaint } from '@/lib/db';
 
 function validateStatus(s: unknown) {
   const allowed = ['Pending', 'Under Process', 'Disposed', 'Overdue'];
@@ -13,29 +14,30 @@ export async function GET(req: NextRequest) {
     const institution = searchParams.get('institution');
     const bureau = searchParams.get('bureau');
 
-    const db = getDb();
-    let sql = 'SELECT * FROM complaints WHERE 1=1';
-    const params: unknown[] = [];
+    const supabase = getSupabaseServerClient();
+    let query = supabase.from('complaints').select('*').order('submission_date', { ascending: false });
 
     if (status && validateStatus(status)) {
-      sql += ' AND status = ?';
-      params.push(status);
+      query = query.eq('status', status);
     }
     if (institution) {
-      sql += ' AND institution_name LIKE ?';
-      params.push(`%${institution}%`);
+      query = query.ilike('institution_name', `%${institution}%`);
     }
     if (bureau) {
-      sql += ' AND bureau = ?';
-      params.push(bureau);
+      query = query.eq('bureau', bureau);
     }
 
-    sql += ' ORDER BY submission_date DESC';
-    const stmt = db.prepare(sql);
-    const rows = params.length ? stmt.all(...(params as string[])) : stmt.all();
-    const complaints = rows.map((r: any) => rowToComplaint(r));
+    const { data: rows, error } = await query;
+
+    if (error) {
+      console.error('Supabase query error:', error.message);
+      return NextResponse.json({ error: 'Failed to fetch complaints' }, { status: 500 });
+    }
+
+    const complaints = (rows || []).map((r) => rowToComplaint(r));
     return NextResponse.json({ complaints }, { status: 200 });
-  } catch {
+  } catch (err: any) {
+    console.error('Complaints GET error:', err);
     return NextResponse.json({ error: 'Failed to fetch complaints' }, { status: 500 });
   }
 }
@@ -57,21 +59,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    const db = getDb();
+    const supabase = getSupabaseServerClient();
     const id = body.id || `case-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const stmt = db.prepare(`
-      INSERT INTO complaints (
-        id, case_number, institution_name, institution_code, location, region, bureau, category, subject,
-        complainant_type, submission_date, expected_disposal_date, status, priority, has_overlap_alert,
-        overlap_case_id, overlap_bureau, overlap_match_score, overlap_reason, assigned_officer, last_updated, summary, raw_json
-      ) VALUES (
-        @id, @case_number, @institution_name, @institution_code, @location, @region, @bureau, @category, @subject,
-        @complainant_type, @submission_date, @expected_disposal_date, @status, @priority, @has_overlap_alert,
-        @overlap_case_id, @overlap_bureau, @overlap_match_score, @overlap_reason, @assigned_officer, @last_updated, @summary, @raw_json
-      )
-    `);
 
-    const row: any = {
+    const row = {
       id,
       case_number: body.caseNumber,
       institution_name: body.institutionName,
@@ -86,7 +77,7 @@ export async function POST(req: NextRequest) {
       expected_disposal_date: body.expectedDisposalDate || new Date().toISOString().split('T')[0],
       status: body.status,
       priority: body.priority || 'Medium',
-      has_overlap_alert: body.hasOverlapAlert ? 1 : 0,
+      has_overlap_alert: Boolean(body.hasOverlapAlert),
       overlap_case_id: body.overlapDetails?.overlapCaseId || null,
       overlap_bureau: body.overlapDetails?.overlapBureau || null,
       overlap_match_score: body.overlapDetails?.matchScore || null,
@@ -97,10 +88,20 @@ export async function POST(req: NextRequest) {
       raw_json: JSON.stringify(body),
     };
 
-    stmt.run(row);
-    const created = db.prepare('SELECT * FROM complaints WHERE id = ?').get(id);
-    return NextResponse.json({ complaint: rowToComplaint(created as any) }, { status: 201 });
-  } catch {
+    const { data: inserted, error } = await supabase
+      .from('complaints')
+      .insert(row)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase insert error:', error.message);
+      return NextResponse.json({ error: 'Failed to create complaint' }, { status: 400 });
+    }
+
+    return NextResponse.json({ complaint: rowToComplaint(inserted) }, { status: 201 });
+  } catch (err: any) {
+    console.error('Complaints POST error:', err);
     return NextResponse.json({ error: 'Failed to create complaint' }, { status: 400 });
   }
 }

@@ -1,25 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const caseId = searchParams.get('caseId');
 
-    const db = getDb();
-    let sql = 'SELECT * FROM case_history WHERE 1=1';
-    const params: unknown[] = [];
+    const supabase = getSupabaseServerClient();
+    let query = supabase.from('case_history').select('*').order('created_at', { ascending: false });
 
     if (caseId) {
-      sql += ' AND (case_id = ? OR case_number = ?)';
-      params.push(caseId, caseId);
+      query = query.or(`case_id.eq.${caseId},case_number.eq.${caseId}`);
     }
 
-    sql += ' ORDER BY created_at DESC';
-    const stmt = db.prepare(sql);
-    const rows = params.length ? stmt.all(...(params as string[])) : stmt.all();
+    const { data: rows, error } = await query;
+    if (error) {
+      console.error('Supabase fetch case history error:', error.message);
+      return NextResponse.json({ error: 'Failed to fetch case history' }, { status: 500 });
+    }
 
-    const history = rows.map((r: any) => ({
+    const history = (rows || []).map((r) => ({
       id: r.id,
       caseId: r.case_id,
       caseNumber: r.case_number,
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
       newStatus: r.new_status,
       actorName: r.actor_name,
       actorRole: r.actor_role,
-      remarks: r.remarks,
+      remarks: r.remarks || r.details,
       createdAt: r.created_at,
     }));
 
@@ -46,26 +46,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required history fields' }, { status: 400 });
     }
 
-    const db = getDb();
+    const supabase = getSupabaseServerClient();
     const id = body.id || `hist-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const stmt = db.prepare(`
-      INSERT INTO case_history (id, case_id, case_number, action, previous_status, new_status, actor_name, actor_role, remarks, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `);
 
-    stmt.run(
+    const newRecord = {
       id,
-      body.caseId,
-      body.caseNumber || body.caseId,
-      body.action,
-      body.previousStatus || null,
-      body.newStatus || null,
-      body.actorName || 'Senior Official',
-      body.actorRole || 'Senior Management',
-      body.remarks || '',
-    );
+      case_id: body.caseId,
+      case_number: body.caseNumber || body.caseId,
+      action: body.action,
+      previous_status: body.previousStatus || null,
+      new_status: body.newStatus || null,
+      actor_name: body.actorName || 'Senior Official',
+      actor_role: body.actorRole || 'Senior Management',
+      remarks: body.remarks || body.details || '',
+      created_at: new Date().toISOString(),
+    };
 
-    const inserted = db.prepare('SELECT * FROM case_history WHERE id = ?').get(id);
+    const { data: inserted, error } = await supabase
+      .from('case_history')
+      .insert(newRecord)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase insert case history error:', error.message);
+      return NextResponse.json({ error: 'Failed to record case history' }, { status: 500 });
+    }
+
     return NextResponse.json({ historyItem: inserted }, { status: 201 });
   } catch (error) {
     console.error('Error recording case history:', error);

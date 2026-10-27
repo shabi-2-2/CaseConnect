@@ -1,13 +1,24 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function GET() {
   try {
-    const db = getDb();
-    db.prepare('SELECT 1').get();
-    const count = db.prepare('SELECT COUNT(*) as c FROM complaints').get() as { c: number };
-    return NextResponse.json({ status: 'ok', db: 'connected', count: count.c }, { status: 200 });
-  } catch {
+    const supabase = getSupabaseServerClient();
+    const { count, error } = await supabase
+      .from('complaints')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      console.error('Health check database query error:', error.message);
+      return NextResponse.json({ status: 'error', db: 'unavailable' }, { status: 500 });
+    }
+
+    return NextResponse.json(
+      { status: 'ok', db: 'connected', count: count ?? 0 },
+      { status: 200 }
+    );
+  } catch (err: any) {
+    console.error('Health check exception:', err?.message || err);
     return NextResponse.json({ status: 'error', db: 'unavailable' }, { status: 500 });
   }
 }

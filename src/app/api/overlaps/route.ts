@@ -1,24 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb, rowToOverlap } from '@/lib/db';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { rowToOverlap } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status');
 
-    const db = getDb();
-    let sql = 'SELECT * FROM overlap_alerts WHERE 1=1';
-    const params: unknown[] = [];
+    const supabase = getSupabaseServerClient();
+    let query = supabase.from('overlap_alerts').select('*').order('detected_date', { ascending: false });
 
     if (status) {
-      sql += ' AND review_status = ?';
-      params.push(status);
+      query = query.eq('review_status', status);
     }
 
-    sql += ' ORDER BY detected_date DESC';
-    const stmt = db.prepare(sql);
-    const rows = params.length ? stmt.all(...(params as string[])) : stmt.all();
-    const overlaps = rows.map((r: any) => rowToOverlap(r));
+    const { data: rows, error } = await query;
+    if (error) {
+      console.error('Supabase fetch overlaps error:', error.message);
+      return NextResponse.json({ error: 'Failed to fetch overlap alerts' }, { status: 500 });
+    }
+
+    const overlaps = (rows || []).map((r) => rowToOverlap(r));
     return NextResponse.json({ overlaps }, { status: 200 });
   } catch (error) {
     console.error('Error fetching overlaps:', error);
@@ -34,9 +36,19 @@ export async function PATCH(req: NextRequest) {
     }
 
     const { id, reviewStatus, reviewedBy, reviewNotes } = body;
-    const db = getDb();
+    const supabase = getSupabaseServerClient();
 
-    const existing = db.prepare('SELECT * FROM overlap_alerts WHERE id = ?').get(id);
+    const { data: existing, error: fetchErr } = await supabase
+      .from('overlap_alerts')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr) {
+      console.error('Supabase fetch existing overlap error:', fetchErr.message);
+      return NextResponse.json({ error: 'Failed to update overlap alert' }, { status: 500 });
+    }
+
     if (!existing) {
       return NextResponse.json({ error: 'Overlap alert not found' }, { status: 404 });
     }
@@ -44,52 +56,67 @@ export async function PATCH(req: NextRequest) {
     const reviewedAt = new Date().toISOString().split('T')[0];
     const reviewer = reviewedBy || 'Senior Management Officer';
 
-    db.prepare(`
-      UPDATE overlap_alerts
-      SET review_status = ?, reviewed_by = ?, reviewed_at = ?, review_notes = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `).run(reviewStatus, reviewer, reviewedAt, reviewNotes || '', id);
+    const { data: updated, error: updateErr } = await supabase
+      .from('overlap_alerts')
+      .update({
+        review_status: reviewStatus,
+        reviewed_by: reviewer,
+        reviewed_at: reviewedAt,
+        review_notes: reviewNotes || '',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateErr) {
+      console.error('Supabase update overlap error:', updateErr.message);
+      return NextResponse.json({ error: 'Failed to update overlap alert' }, { status: 500 });
+    }
 
     // If decision was Confirmed Related or Duplicate, mark complaints or log history
     try {
-      const alert = existing as any;
       if (reviewStatus === 'Confirmed Related' || reviewStatus === 'Confirmed Duplicate') {
-        db.prepare('UPDATE complaints SET has_overlap_alert = 1 WHERE id IN (?, ?)').run(alert.case1_id, alert.case2_id);
+        await supabase
+          .from('complaints')
+          .update({ has_overlap_alert: true })
+          .in('id', [existing.case1_id, existing.case2_id]);
       }
+
       // Also log to case history for both cases
       const actionText = `Overlap review: ${reviewStatus}`;
-      const logStmt = db.prepare(`
-        INSERT INTO case_history (id, case_id, case_number, action, previous_status, new_status, actor_name, actor_role, remarks, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      `);
-      logStmt.run(
-        `hist-ovr-${Date.now()}-1`,
-        alert.case1_id,
-        alert.case1_number,
-        actionText,
-        alert.case1_status,
-        alert.case1_status,
-        reviewer,
-        'Senior Management',
-        `Linked with ${alert.case2_number}. Note: ${reviewNotes || 'Confirmed by senior management review.'}`
-      );
-      logStmt.run(
-        `hist-ovr-${Date.now()}-2`,
-        alert.case2_id,
-        alert.case2_number,
-        actionText,
-        alert.case2_status,
-        alert.case2_status,
-        reviewer,
-        'Senior Management',
-        `Linked with ${alert.case1_number}. Note: ${reviewNotes || 'Confirmed by senior management review.'}`
-      );
+      const now = new Date().toISOString();
+      await supabase.from('case_history').insert([
+        {
+          id: `hist-ovr-${Date.now()}-1`,
+          case_id: existing.case1_id,
+          case_number: existing.case1_number,
+          action: actionText,
+          previous_status: existing.case1_status,
+          new_status: existing.case1_status,
+          actor_name: reviewer,
+          actor_role: 'Senior Management',
+          remarks: `Linked with ${existing.case2_number}. Note: ${reviewNotes || 'Confirmed by senior management review.'}`,
+          created_at: now,
+        },
+        {
+          id: `hist-ovr-${Date.now()}-2`,
+          case_id: existing.case2_id,
+          case_number: existing.case2_number,
+          action: actionText,
+          previous_status: existing.case2_status,
+          new_status: existing.case2_status,
+          actor_name: reviewer,
+          actor_role: 'Senior Management',
+          remarks: `Linked with ${existing.case1_number}. Note: ${reviewNotes || 'Confirmed by senior management review.'}`,
+          created_at: now,
+        },
+      ]);
     } catch (e) {
       console.error('Failed to log overlap decision in case history', e);
     }
 
-    const updated = db.prepare('SELECT * FROM overlap_alerts WHERE id = ?').get(id);
-    return NextResponse.json({ overlap: rowToOverlap(updated as any) }, { status: 200 });
+    return NextResponse.json({ overlap: rowToOverlap(updated) }, { status: 200 });
   } catch (error) {
     console.error('Error updating overlap alert:', error);
     return NextResponse.json({ error: 'Failed to update overlap alert' }, { status: 500 });

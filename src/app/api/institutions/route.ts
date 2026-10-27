@@ -1,36 +1,55 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { NextResponse } from 'next/server';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { SAMPLE_INSTITUTIONS } from '@/data/mockData';
 import { InstitutionItem } from '@/types/dashboard';
 
 export async function GET() {
   try {
-    const db = getDb();
+    const supabase = getSupabaseServerClient();
+    const { data: complaints, error } = await supabase
+      .from('complaints')
+      .select('institution_code, institution_name, status, bureau, has_overlap_alert');
 
-    // Query aggregates per institution from SQLite complaints
-    const countStmt = db.prepare(`
-      SELECT
-        institution_code,
-        institution_name,
-        COUNT(*) as total,
-        SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN status = 'Under Process' THEN 1 ELSE 0 END) as under_process,
-        SUM(CASE WHEN status = 'Disposed' THEN 1 ELSE 0 END) as disposed,
-        SUM(CASE WHEN status = 'Overdue' THEN 1 ELSE 0 END) as overdue,
-        SUM(CASE WHEN bureau = 'PGRC' THEN 1 ELSE 0 END) as pgrc,
-        SUM(CASE WHEN bureau = 'Regulation Bureau' THEN 1 ELSE 0 END) as regulation,
-        SUM(CASE WHEN has_overlap_alert = 1 THEN 1 ELSE 0 END) as overlaps
-      FROM complaints
-      GROUP BY institution_code
-    `);
+    if (error) {
+      console.error('Supabase fetch complaints for institutions error:', error.message);
+      return NextResponse.json({ error: 'Failed to fetch institutions' }, { status: 500 });
+    }
 
-    const dbStats = countStmt.all() as any[];
     const statsByCode: Record<string, any> = {};
     const statsByName: Record<string, any> = {};
 
-    for (const s of dbStats) {
-      if (s.institution_code) statsByCode[s.institution_code] = s;
-      if (s.institution_name) statsByName[s.institution_name.toLowerCase()] = s;
+    for (const c of complaints || []) {
+      const code = c.institution_code;
+      const name = c.institution_name?.toLowerCase();
+
+      const processItem = (targetMap: Record<string, any>, key: string) => {
+        if (!targetMap[key]) {
+          targetMap[key] = {
+            total: 0,
+            pending: 0,
+            under_process: 0,
+            disposed: 0,
+            overdue: 0,
+            pgrc: 0,
+            regulation: 0,
+            overlaps: 0,
+          };
+        }
+        const s = targetMap[key];
+        s.total += 1;
+        if (c.status === 'Pending') s.pending += 1;
+        else if (c.status === 'Under Process') s.under_process += 1;
+        else if (c.status === 'Disposed') s.disposed += 1;
+        else if (c.status === 'Overdue') s.overdue += 1;
+
+        if (c.bureau === 'PGRC') s.pgrc += 1;
+        else if (c.bureau === 'Regulation Bureau') s.regulation += 1;
+
+        if (c.has_overlap_alert) s.overlaps += 1;
+      };
+
+      if (code) processItem(statsByCode, code);
+      if (name) processItem(statsByName, name);
     }
 
     const institutions: InstitutionItem[] = SAMPLE_INSTITUTIONS.map((inst) => {

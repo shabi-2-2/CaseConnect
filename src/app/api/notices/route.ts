@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb, rowToNotice } from '@/lib/db';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { rowToNotice } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
@@ -7,24 +8,23 @@ export async function GET(req: NextRequest) {
     const caseId = searchParams.get('caseId');
     const institutionCode = searchParams.get('institutionCode');
 
-    const db = getDb();
-    let sql = 'SELECT * FROM regulatory_notices WHERE 1=1';
-    const params: unknown[] = [];
+    const supabase = getSupabaseServerClient();
+    let query = supabase.from('regulatory_notices').select('*').order('created_at', { ascending: false });
 
     if (caseId) {
-      sql += ' AND (case_id = ? OR case_number = ?)';
-      params.push(caseId, caseId);
+      query = query.or(`case_id.eq.${caseId},case_number.eq.${caseId}`);
     }
     if (institutionCode) {
-      sql += ' AND institution_code = ?';
-      params.push(institutionCode);
+      query = query.eq('institution_code', institutionCode);
     }
 
-    sql += ' ORDER BY created_at DESC';
-    const stmt = db.prepare(sql);
-    const rows = params.length ? stmt.all(...(params as string[])) : stmt.all();
+    const { data: rows, error } = await query;
+    if (error) {
+      console.error('Supabase fetch notices error:', error.message);
+      return NextResponse.json({ error: 'Failed to fetch regulatory notices' }, { status: 500 });
+    }
 
-    const notices = rows.map((r: any) => rowToNotice(r));
+    const notices = (rows || []).map((r) => rowToNotice(r));
     return NextResponse.json({ notices }, { status: 200 });
   } catch (error) {
     console.error('Error fetching regulatory notices:', error);
@@ -56,65 +56,63 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const db = getDb();
+    const supabase = getSupabaseServerClient();
     const id = `not-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const randomSeq = Math.floor(100 + Math.random() * 900);
     const noticeNumber = body.noticeNumber || `RN-2026-${randomSeq}`;
     const finalNoticeDate = noticeDate || new Date().toISOString().split('T')[0];
     const finalIssuedBy = issuedBy || 'Regulation Bureau Official';
 
-    const insertNotice = db.prepare(`
-      INSERT INTO regulatory_notices (
-        id, notice_number, case_id, case_number, institution_name, institution_code,
-        notice_type, reason, notice_date, response_deadline, remarks, supporting_docs,
-        issued_by, status, created_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?,
-        ?, 'Issued', datetime('now')
-      )
-    `);
-
-    insertNotice.run(
+    const newNotice = {
       id,
-      noticeNumber,
-      caseId,
-      caseNumber || caseId,
-      institutionName,
-      institutionCode || '',
-      noticeType,
+      notice_number: noticeNumber,
+      case_id: caseId,
+      case_number: caseNumber || caseId,
+      institution_name: institutionName,
+      institution_code: institutionCode || '',
+      notice_type: noticeType,
       reason,
-      finalNoticeDate,
-      responseDeadline,
-      remarks || '',
-      supportingDocs || '',
-      finalIssuedBy
-    );
+      notice_date: finalNoticeDate,
+      response_deadline: responseDeadline,
+      remarks: remarks || '',
+      supporting_docs: supportingDocs || '',
+      issued_by: finalIssuedBy,
+      status: 'Issued',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: createdRow, error: insertErr } = await supabase
+      .from('regulatory_notices')
+      .insert(newNotice)
+      .select()
+      .single();
+
+    if (insertErr) {
+      console.error('Supabase create notice error:', insertErr.message);
+      return NextResponse.json({ error: 'Failed to create regulatory notice' }, { status: 500 });
+    }
 
     // Record in case_history audit ledger
-    const histId = `hist-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const insertHistory = db.prepare(`
-      INSERT INTO case_history (
-        id, case_id, case_number, action, previous_status, new_status, actor_name, actor_role, remarks, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `);
+    try {
+      const histId = `hist-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      await supabase.from('case_history').insert({
+        id: histId,
+        case_id: caseId,
+        case_number: caseNumber || caseId,
+        action: 'Regulatory Notice Issued',
+        previous_status: 'Under Process',
+        new_status: 'Under Process',
+        actor_name: finalIssuedBy,
+        actor_role: 'Regulation Bureau',
+        remarks: `Issued ${noticeType} (${noticeNumber}). Reason: ${reason}. Response Deadline: ${responseDeadline}. Remarks: ${remarks || 'None'}`,
+        created_at: new Date().toISOString(),
+      });
+    } catch (hErr) {
+      console.error('Failed to log notice to history', hErr);
+    }
 
-    insertHistory.run(
-      histId,
-      caseId,
-      caseNumber || caseId,
-      'Regulatory Notice Issued',
-      'Under Process',
-      'Under Process',
-      finalIssuedBy,
-      'Regulation Bureau',
-      `Issued ${noticeType} (${noticeNumber}). Reason: ${reason}. Response Deadline: ${responseDeadline}. Remarks: ${remarks || 'None'}`
-    );
-
-    const createdRow = db.prepare('SELECT * FROM regulatory_notices WHERE id = ?').get(id);
-    const notice = rowToNotice(createdRow);
-
-    return NextResponse.json({ success: true, notice }, { status: 201 });
+    return NextResponse.json({ success: true, notice: rowToNotice(createdRow) }, { status: 201 });
   } catch (error) {
     console.error('Error creating regulatory notice:', error);
     return NextResponse.json({ error: 'Failed to create regulatory notice' }, { status: 500 });

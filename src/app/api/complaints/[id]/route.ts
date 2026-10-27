@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb, rowToComplaint } from '@/lib/db';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { rowToComplaint } from '@/lib/db';
+import { Database } from '@/lib/supabase/types';
 
 function validateStatus(s: unknown) {
   const allowed = ['Pending', 'Under Process', 'Disposed', 'Overdue'];
@@ -9,13 +11,25 @@ function validateStatus(s: unknown) {
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const db = getDb();
-    const row = db.prepare('SELECT * FROM complaints WHERE id = ?').get(id);
+    const supabase = getSupabaseServerClient();
+    const { data: row, error } = await supabase
+      .from('complaints')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Supabase fetch complaint error:', error.message);
+      return NextResponse.json({ error: 'Failed to fetch complaint' }, { status: 500 });
+    }
+
     if (!row) {
       return NextResponse.json({ error: 'Complaint not found' }, { status: 404 });
     }
-    return NextResponse.json({ complaint: rowToComplaint(row as any) }, { status: 200 });
-  } catch {
+
+    return NextResponse.json({ complaint: rowToComplaint(row) }, { status: 200 });
+  } catch (err: any) {
+    console.error('Complaint GET by ID error:', err);
     return NextResponse.json({ error: 'Failed to fetch complaint' }, { status: 500 });
   }
 }
@@ -28,92 +42,94 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const db = getDb();
-    const existing = db.prepare('SELECT * FROM complaints WHERE id = ?').get(id);
+    const supabase = getSupabaseServerClient();
+    const { data: existing, error: fetchErr } = await supabase
+      .from('complaints')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr) {
+      console.error('Supabase fetch existing complaint error:', fetchErr.message);
+      return NextResponse.json({ error: 'Failed to fetch complaint' }, { status: 500 });
+    }
+
     if (!existing) {
       return NextResponse.json({ error: 'Complaint not found' }, { status: 404 });
     }
 
-    const updates: string[] = [];
-    const values: any = { id };
+    const updates: Database['public']['Tables']['complaints']['Update'] = {};
 
     if (body.status !== undefined) {
       if (!validateStatus(body.status)) {
         return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
       }
-      updates.push('status = @status');
-      values.status = body.status;
+      updates.status = body.status;
     }
     if (body.assignedOfficer !== undefined) {
-      updates.push('assigned_officer = @assigned_officer');
-      values.assigned_officer = body.assignedOfficer;
+      updates.assigned_officer = body.assignedOfficer;
     }
     if (body.summary !== undefined) {
-      updates.push('summary = @summary');
-      values.summary = body.summary;
+      updates.summary = body.summary;
     }
     if (body.priority !== undefined) {
-      updates.push('priority = @priority');
-      values.priority = body.priority;
+      updates.priority = body.priority;
     }
     if (body.expectedDisposalDate !== undefined) {
-      updates.push('expected_disposal_date = @expected_disposal_date');
-      values.expected_disposal_date = body.expectedDisposalDate;
+      updates.expected_disposal_date = body.expectedDisposalDate;
     }
     if (body.hasOverlapAlert !== undefined) {
-      updates.push('has_overlap_alert = @has_overlap_alert');
-      values.has_overlap_alert = body.hasOverlapAlert ? 1 : 0;
+      updates.has_overlap_alert = Boolean(body.hasOverlapAlert);
     }
     if (body.managementFlagged !== undefined) {
-      updates.push('management_flagged = @management_flagged');
-      values.management_flagged = body.managementFlagged ? 1 : 0;
+      updates.management_flagged = Boolean(body.managementFlagged);
     }
     if (body.followUp !== undefined) {
-      updates.push('follow_up_json = @follow_up_json');
-      values.follow_up_json = body.followUp ? JSON.stringify(body.followUp) : null;
+      updates.follow_up_json = body.followUp ? JSON.stringify(body.followUp) : null;
     }
     if (body.managementNotes !== undefined) {
-      updates.push('notes_json = @notes_json');
-      values.notes_json = JSON.stringify(body.managementNotes);
+      updates.notes_json = JSON.stringify(body.managementNotes);
     }
 
-    updates.push("last_updated = @last_updated");
-    values.last_updated = new Date().toISOString().split('T')[0];
-    updates.push("updated_at = datetime('now')");
+    updates.last_updated = new Date().toISOString().split('T')[0];
+    updates.updated_at = new Date().toISOString();
 
-    if (updates.length === 0) {
-      return NextResponse.json({ complaint: rowToComplaint(existing as any) }, { status: 200 });
+    const { data: updated, error: updateErr } = await supabase
+      .from('complaints')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateErr) {
+      console.error('Supabase update complaint error:', updateErr.message);
+      return NextResponse.json({ error: 'Failed to update complaint' }, { status: 400 });
     }
-
-    const sql = `UPDATE complaints SET ${updates.join(', ')} WHERE id = @id`;
-    db.prepare(sql).run(values);
 
     // If status changed, record in case_history
-    if (body.status !== undefined && body.status !== (existing as any).status) {
+    if (body.status !== undefined && body.status !== existing.status) {
       try {
         const histId = `hist-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        db.prepare(`
-          INSERT INTO case_history (id, case_id, case_number, action, previous_status, new_status, actor_name, actor_role, remarks, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-        `).run(
-          histId,
-          (existing as any).id,
-          (existing as any).case_number,
-          `Status changed to ${body.status}`,
-          (existing as any).status,
-          body.status,
-          body.actorName || body.assignedOfficer || 'Authorized Official',
-          body.actorRole || 'Official',
-          body.remarks || `Status transitioned from ${(existing as any).status} to ${body.status}`
-        );
+        await supabase.from('case_history').insert({
+          id: histId,
+          case_id: existing.id,
+          case_number: existing.case_number,
+          action: `Status changed to ${body.status}`,
+          previous_status: existing.status,
+          new_status: body.status,
+          actor_name: body.actorName || body.assignedOfficer || 'Authorized Official',
+          actor_role: body.actorRole || 'Official',
+          remarks: body.remarks || `Status transitioned from ${existing.status} to ${body.status}`,
+          created_at: new Date().toISOString(),
+        });
       } catch (err) {
         console.error('Failed to log history', err);
       }
     }
 
-    const updated = db.prepare('SELECT * FROM complaints WHERE id = ?').get(id);
-    return NextResponse.json({ complaint: rowToComplaint(updated as any) }, { status: 200 });
-  } catch {
+    return NextResponse.json({ complaint: rowToComplaint(updated) }, { status: 200 });
+  } catch (err: any) {
+    console.error('Complaint PATCH error:', err);
     return NextResponse.json({ error: 'Failed to update complaint' }, { status: 400 });
   }
 }
@@ -121,14 +137,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const db = getDb();
-    const existing = db.prepare('SELECT id FROM complaints WHERE id = ?').get(id);
-    if (!existing) {
+    const supabase = getSupabaseServerClient();
+    const { data: existing, error: fetchErr } = await supabase
+      .from('complaints')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr || !existing) {
       return NextResponse.json({ error: 'Complaint not found' }, { status: 404 });
     }
-    db.prepare('DELETE FROM complaints WHERE id = ?').run(id);
+
+    const { error: delErr } = await supabase.from('complaints').delete().eq('id', id);
+    if (delErr) {
+      console.error('Supabase delete complaint error:', delErr.message);
+      return NextResponse.json({ error: 'Failed to delete complaint' }, { status: 500 });
+    }
+
     return NextResponse.json({ success: true }, { status: 200 });
-  } catch {
+  } catch (err: any) {
+    console.error('Complaint DELETE error:', err);
     return NextResponse.json({ error: 'Failed to delete complaint' }, { status: 500 });
   }
 }

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb, rowToInstitutionResponse } from '@/lib/db';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { rowToInstitutionResponse } from '@/lib/db';
+import { Database } from '@/lib/supabase/types';
 import crypto from 'crypto';
 
 export async function GET(request: NextRequest) {
@@ -9,27 +11,28 @@ export async function GET(request: NextRequest) {
     const caseId = searchParams.get('caseId');
     const noticeId = searchParams.get('noticeId');
 
-    const db = getDb();
-    let query = 'SELECT * FROM institution_responses WHERE 1=1';
-    const params: any[] = [];
+    const supabase = getSupabaseServerClient();
+    let query = supabase.from('institution_responses').select('*').order('created_at', { ascending: false });
 
     if (institutionCode) {
-      query += ' AND institution_code = ?';
-      params.push(institutionCode);
+      query = query.eq('institution_code', institutionCode);
     }
     if (caseId) {
-      query += ' AND (case_id = ? OR case_number = ?)';
-      params.push(caseId, caseId);
+      query = query.or(`case_id.eq.${caseId},case_number.eq.${caseId}`);
     }
     if (noticeId) {
-      query += ' AND (notice_id = ? OR notice_number = ?)';
-      params.push(noticeId, noticeId);
+      query = query.or(`notice_id.eq.${noticeId},notice_number.eq.${noticeId}`);
     }
 
-    query += ' ORDER BY created_at DESC';
+    const { data: rows, error } = await query;
+    if (error) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 }
+      );
+    }
 
-    const rows = db.prepare(query).all(...params);
-    const responses = rows.map(rowToInstitutionResponse);
+    const responses = (rows || []).map(rowToInstitutionResponse);
 
     return NextResponse.json({
       success: true,
@@ -70,78 +73,74 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getDb();
-
-    // Generate IDs
+    const supabase = getSupabaseServerClient();
     const id = `resp-${crypto.randomUUID()}`;
     const randSuffix = Math.floor(1000 + Math.random() * 9000);
     const responseNumber = `RESP-2026-${randSuffix}`;
     const status = isDraft ? 'Draft' : 'Submitted';
     const submissionDate = new Date().toISOString().split('T')[0];
 
-    db.prepare(`
-      INSERT INTO institution_responses (
-        id, response_number, case_id, case_number, notice_id, notice_number,
-        institution_code, institution_name, bureau, subject, response_text,
-        supporting_documents_json, submitted_by_name, submitted_by_designation,
-        submission_date, status, created_at, updated_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, datetime('now'), datetime('now')
-      )
-    `).run(
+    const newResponse = {
       id,
-      responseNumber,
-      caseId || null,
-      caseNumber || null,
-      noticeId || null,
-      noticeNumber || null,
-      institutionCode,
-      institutionName || 'Apex Institute of Technology & Engineering',
+      response_number: responseNumber,
+      case_id: caseId || null,
+      case_number: caseNumber || null,
+      notice_id: noticeId || null,
+      notice_number: noticeNumber || null,
+      institution_code: institutionCode,
+      institution_name: institutionName || 'Apex Institute of Technology & Engineering',
       bureau,
       subject,
-      responseText,
-      JSON.stringify(supportingDocuments),
-      submittedByName,
-      submittedByDesignation,
-      submissionDate,
-      status
-    );
+      response_text: responseText,
+      supporting_documents_json: JSON.stringify(supportingDocuments),
+      submitted_by_name: submittedByName,
+      submitted_by_designation: submittedByDesignation,
+      submission_date: submissionDate,
+      status,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
 
-    // If caseId or caseNumber is present, also log this into the shared case_history table!
+    const { data: createdRow, error: insertErr } = await supabase
+      .from('institution_responses')
+      .insert(newResponse)
+      .select()
+      .single();
+
+    if (insertErr) {
+      return NextResponse.json(
+        { success: false, error: insertErr.message },
+        { status: 500 }
+      );
+    }
+
+    // If caseId or caseNumber is present, log to case_history and update complaints last_updated
     if (caseId || caseNumber) {
       const historyId = `hist-${crypto.randomUUID()}`;
       try {
-        db.prepare(`
-          INSERT INTO case_history (
-            id, case_id, case_number, action, details, actor_name, actor_role, timestamp, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-        `).run(
-          historyId,
-          caseId || caseNumber,
-          caseNumber || caseId,
-          isDraft ? 'Compliance Rebuttal Draft Saved' : 'Compliance Response Submitted',
-          `Institutional response ${responseNumber} filed: "${subject}". Documents attached: ${supportingDocuments.length}. Submitter: ${submittedByName} (${submittedByDesignation}).`,
-          submittedByName,
-          'Institution'
-        );
+        await supabase.from('case_history').insert({
+          id: historyId,
+          case_id: caseId || caseNumber,
+          case_number: caseNumber || caseId,
+          action: isDraft ? 'Compliance Rebuttal Draft Saved' : 'Compliance Response Submitted',
+          details: `Institutional response ${responseNumber} filed: "${subject}". Documents attached: ${supportingDocuments.length}. Submitter: ${submittedByName} (${submittedByDesignation}).`,
+          actor_name: submittedByName,
+          actor_role: 'Institution',
+          remarks: `Institutional response ${responseNumber} filed: "${subject}". Documents attached: ${supportingDocuments.length}. Submitter: ${submittedByName} (${submittedByDesignation}).`,
+          created_at: new Date().toISOString(),
+        });
       } catch (histErr) {
         console.error('Failed to log case_history for institution response:', histErr);
       }
 
-      // Also update complaints last_updated
       try {
-        db.prepare(`
-          UPDATE complaints
-          SET last_updated = datetime('now'), updated_at = datetime('now')
-          WHERE id = ? OR case_number = ?
-        `).run(caseId || caseNumber, caseNumber || caseId);
+        const now = new Date().toISOString().split('T')[0];
+        await supabase
+          .from('complaints')
+          .update({ last_updated: now, updated_at: new Date().toISOString() })
+          .or(`id.eq.${caseId || caseNumber},case_number.eq.${caseNumber || caseId}`);
       } catch {}
     }
-
-    const createdRow = db.prepare('SELECT * FROM institution_responses WHERE id = ?').get(id);
 
     return NextResponse.json({
       success: true,
@@ -167,30 +166,37 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Response ID required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const existing = db.prepare('SELECT * FROM institution_responses WHERE id = ?').get(id);
-    if (!existing) {
+    const supabase = getSupabaseServerClient();
+    const { data: existing, error: fetchErr } = await supabase
+      .from('institution_responses')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr || !existing) {
       return NextResponse.json({ success: false, error: 'Response not found' }, { status: 404 });
     }
 
-    db.prepare(`
-      UPDATE institution_responses
-      SET
-        status = COALESCE(?, status),
-        bureau_feedback = COALESCE(?, bureau_feedback),
-        response_text = COALESCE(?, response_text),
-        supporting_documents_json = COALESCE(?, supporting_documents_json),
-        updated_at = datetime('now')
-      WHERE id = ?
-    `).run(
-      status,
-      bureauFeedback,
-      responseText,
-      supportingDocuments ? JSON.stringify(supportingDocuments) : null,
-      id
-    );
+    const updates: Database['public']['Tables']['institution_responses']['Update'] = {
+      updated_at: new Date().toISOString(),
+    };
+    if (status !== undefined) updates.status = status;
+    if (bureauFeedback !== undefined) updates.bureau_feedback = bureauFeedback;
+    if (responseText !== undefined) updates.response_text = responseText;
+    if (supportingDocuments !== undefined) {
+      updates.supporting_documents_json = JSON.stringify(supportingDocuments);
+    }
 
-    const updated = db.prepare('SELECT * FROM institution_responses WHERE id = ?').get(id);
+    const { data: updated, error: updateErr } = await supabase
+      .from('institution_responses')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateErr) {
+      return NextResponse.json({ success: false, error: updateErr.message }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,

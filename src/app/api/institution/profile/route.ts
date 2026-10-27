@@ -1,17 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb, rowToInstitutionProfile } from '@/lib/db';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { rowToInstitutionProfile } from '@/lib/db';
+import { Database } from '@/lib/supabase/types';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code') || '1-3329182741';
 
-    const db = getDb();
-    const row = db.prepare('SELECT * FROM institution_profiles WHERE code = ?').get(code);
+    const supabase = getSupabaseServerClient();
+    const { data: row, error } = await supabase
+      .from('institution_profiles')
+      .select('*')
+      .eq('code', code)
+      .maybeSingle();
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 }
+      );
+    }
 
     if (!row) {
-      // Fallback search by matching complaints or sample defaults
-      const sampleRow = db.prepare('SELECT * FROM institution_profiles LIMIT 1').get();
+      const { data: sampleRow } = await supabase
+        .from('institution_profiles')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+
       if (sampleRow) {
         return NextResponse.json({ success: true, profile: rowToInstitutionProfile(sampleRow) });
       }
@@ -54,44 +71,46 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const db = getDb();
-    const existing = db.prepare('SELECT * FROM institution_profiles WHERE code = ?').get(code);
-    if (!existing) {
+    const supabase = getSupabaseServerClient();
+    const { data: existing, error: fetchErr } = await supabase
+      .from('institution_profiles')
+      .select('*')
+      .eq('code', code)
+      .maybeSingle();
+
+    if (fetchErr || !existing) {
       return NextResponse.json(
         { success: false, error: `No institution found with code: ${code}` },
         { status: 404 }
       );
     }
 
-    db.prepare(`
-      UPDATE institution_profiles
-      SET
-        principal_name = COALESCE(?, principal_name),
-        contact_email = COALESCE(?, contact_email),
-        contact_phone = COALESCE(?, contact_phone),
-        nodal_officer_name = COALESCE(?, nodal_officer_name),
-        nodal_officer_email = COALESCE(?, nodal_officer_email),
-        nodal_officer_phone = COALESCE(?, nodal_officer_phone),
-        website = COALESCE(?, website),
-        updated_at = datetime('now')
-      WHERE code = ?
-    `).run(
-      principalName,
-      contactEmail,
-      contactPhone,
-      nodalOfficerName,
-      nodalOfficerEmail,
-      nodalOfficerPhone,
-      website,
-      code
-    );
+    const updates: Database['public']['Tables']['institution_profiles']['Update'] = {
+      updated_at: new Date().toISOString(),
+    };
+    if (principalName !== undefined) updates.principal_name = principalName;
+    if (contactEmail !== undefined) updates.contact_email = contactEmail;
+    if (contactPhone !== undefined) updates.contact_phone = contactPhone;
+    if (nodalOfficerName !== undefined) updates.nodal_officer_name = nodalOfficerName;
+    if (nodalOfficerEmail !== undefined) updates.nodal_officer_email = nodalOfficerEmail;
+    if (nodalOfficerPhone !== undefined) updates.nodal_officer_phone = nodalOfficerPhone;
+    if (website !== undefined) updates.website = website;
 
-    const updated = db.prepare('SELECT * FROM institution_profiles WHERE code = ?').get(code);
+    const { data: updated, error: updateErr } = await supabase
+      .from('institution_profiles')
+      .update(updates)
+      .eq('code', code)
+      .select()
+      .single();
+
+    if (updateErr) {
+      return NextResponse.json({ success: false, error: updateErr.message }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,
       profile: rowToInstitutionProfile(updated),
-      message: 'Institution profile successfully updated in persistent SQLite database',
+      message: 'Institution profile successfully updated in persistent database',
     });
   } catch (error: any) {
     return NextResponse.json(
