@@ -180,14 +180,7 @@ export default function SeniorManagementDashboard() {
               </Link>
             );
           })}
-          <Link href="/pgrc-dashboard" className={`mt-4 group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all text-white/80 hover:bg-white/10 hover:text-white ${isCollapsed ? 'justify-center px-2' : ''}`}>
-            <ShieldCheck className="h-4 w-4 shrink-0 text-white/70 group-hover:text-white" />
-            {!isCollapsed && <span className="truncate flex-1 text-left">PGRC Official Dashboard</span>}
-          </Link>
-          <Link href="/" className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium transition-all text-white/80 hover:bg-white/10 hover:text-white ${isCollapsed ? 'justify-center px-2' : ''}`}>
-            <FileText className="h-4 w-4 shrink-0 text-white/70 group-hover:text-white" />
-            {!isCollapsed && <span className="truncate flex-1 text-left">Switch Role / Home</span>}
-          </Link>
+
         </nav>
       </aside>
 
@@ -230,10 +223,6 @@ export default function SeniorManagementDashboard() {
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:self-start md:self-auto">
-                  <Link href="/pgrc-dashboard" className="inline-flex items-center gap-1.5 rounded-lg border border-[#002b5c]/30 bg-white px-3 py-2 text-xs font-semibold text-[#002b5c] shadow-2xs hover:bg-[#002b5c]/5">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    <span>PGRC Official Dashboard</span>
-                  </Link>
                   <button onClick={handleRefresh} disabled={isRefreshing} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20">
                     <RefreshCw className={`h-3.5 w-3.5 text-slate-500 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
                     <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>

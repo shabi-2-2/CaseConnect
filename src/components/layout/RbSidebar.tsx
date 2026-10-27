@@ -226,30 +226,7 @@ export function RbSidebar({
           })}
         </nav>
 
-        {/* Footer / Switch Role / Home */}
-        <div className="border-t border-white/10 p-3 space-y-1">
-          <Link
-            href="/management"
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors ${
-              isCollapsed ? 'justify-center px-0' : ''
-            }`}
-            title={isCollapsed ? 'Senior Management' : undefined}
-          >
-            <ShieldCheck className="h-4 w-4 shrink-0 text-white/60" />
-            {!isCollapsed && <span>Senior Management</span>}
-          </Link>
-
-          <Link
-            href="/"
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors ${
-              isCollapsed ? 'justify-center px-0' : ''
-            }`}
-            title={isCollapsed ? 'Switch Role / Home' : undefined}
-          >
-            <Scale className="h-4 w-4 shrink-0 text-amber-300/80" />
-            {!isCollapsed && <span>Switch Role / Home</span>}
-          </Link>
-        </div>
+        <div className="border-t border-white/10 p-3" />
       </aside>
     </>
   );

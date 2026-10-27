@@ -237,12 +237,7 @@ function InstitutionOverviewPageContent() {
               <SendHorizontal className="h-3.5 w-3.5" />
               <span>Submit Compliance Reply</span>
             </Link>
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              Switch Role
-            </Link>
+            <div />
           </div>
         </header>
 

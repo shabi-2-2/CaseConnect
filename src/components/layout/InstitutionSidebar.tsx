@@ -225,19 +225,7 @@ export function InstitutionSidebar({
           })}
         </nav>
 
-        {/* Footer Area: Switch role / logout */}
-        <div className="border-t border-white/10 p-3 space-y-1">
-          <Link
-            href="/"
-            className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all ${
-              isCollapsed ? 'justify-center' : ''
-            }`}
-            title="Switch Dashboard Role / Landing Page"
-          >
-            <ShieldCheck className="h-4 w-4 shrink-0 text-white/60 group-hover:text-emerald-300" />
-            {!isCollapsed && <span className="truncate">Switch Role / AICTE Portal</span>}
-          </Link>
-        </div>
+        <div className="border-t border-white/10 p-3" />
       </aside>
 
       {/* Switch Institution Modal for Evaluators */}

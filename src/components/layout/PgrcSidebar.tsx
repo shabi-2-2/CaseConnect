@@ -243,30 +243,7 @@ export function PgrcSidebar({
             );
           })}
 
-          <div className="pt-3 border-t border-white/10 mt-3">
-            <Link
-              href="/management"
-              className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all text-white/70 hover:bg-white/10 hover:text-white ${
-                isCollapsed ? 'justify-center px-2' : ''
-              }`}
-            >
-              <ShieldCheck className="h-4 w-4 shrink-0 text-white/60 group-hover:text-white" />
-              {!isCollapsed && (
-                <span className="truncate flex-1 text-left">Senior Management</span>
-              )}
-            </Link>
-            <Link
-              href="/"
-              className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all text-white/70 hover:bg-white/10 hover:text-white ${
-                isCollapsed ? 'justify-center px-2' : ''
-              }`}
-            >
-              <FileCheck2 className="h-4 w-4 shrink-0 text-white/60 group-hover:text-white" />
-              {!isCollapsed && (
-                <span className="truncate flex-1 text-left">Switch Role / Home</span>
-              )}
-            </Link>
-          </div>
+          <div className="pt-3 border-t border-white/10 mt-3" />
         </nav>
 
         {/* Bottom AICTE System Info */}
